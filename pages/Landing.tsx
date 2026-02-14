@@ -7,7 +7,7 @@ import { supabase } from '../lib/supabase';
 const Landing: React.FC = () => {
   const { loginAsGuest, t, language } = useApp();
   const navigate = useNavigate();
-  const [email, setEmail] = useState('asm977661@gmail.com'); // Pre-fill for convenience based on prompt
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
@@ -45,7 +45,8 @@ const Landing: React.FC = () => {
       });
       if (error) throw error;
     } catch (error: any) {
-      setErrorMsg(error.message || "Failed to initiate Google Login");
+      console.error("Google Login Error:", error);
+      setErrorMsg(error.message || "Failed to initiate Google Login. Please ensure Google provider is enabled in Supabase.");
     }
   };
 
@@ -104,7 +105,7 @@ const Landing: React.FC = () => {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   className="w-full pl-10 pr-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition-all"
-                  placeholder="name@university.edu"
+                  placeholder="example@gmail.com"
                 />
               </div>
             </div>
