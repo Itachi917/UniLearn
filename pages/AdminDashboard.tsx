@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Navbar from '../components/layout/Navbar';
 import { useApp } from '../context/AppContext';
 import { supabase } from '../lib/supabase';
-import { Save, Plus, Trash2, Edit, ArrowLeft, Layers, Book, BrainCircuit, Users, Database, FileJson, Check, X, AlertCircle, Sparkles, Wand2, MessageSquarePlus } from 'lucide-react';
+import { Save, Plus, Trash2, Edit, ArrowLeft, Layers, Book, BrainCircuit, Users, Database, FileJson, Check, X, AlertCircle, Sparkles, Wand2, MessageSquarePlus, UploadCloud, FileText } from 'lucide-react';
 import { Subject, Lecture, Flashcard, QuizQuestion } from '../types';
 import { GoogleGenAI, Type } from '@google/genai';
 
@@ -29,6 +29,9 @@ const AdminDashboard: React.FC = () => {
   const [saving, setSaving] = useState(false);
   const [generatingAI, setGeneratingAI] = useState(false);
   const [msg, setMsg] = useState<{type: 'success' | 'error' | 'info', text: string} | null>(null);
+
+  // File Upload State
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // JSON Edit State
   const [editMode, setEditMode] = useState<'VISUAL' | 'JSON'>('VISUAL');
@@ -88,24 +91,20 @@ const AdminDashboard: React.FC = () => {
     setSaving(true);
     setMsg(null);
     try {
-      // Create a timeout promise to prevent infinite hanging (15 seconds)
       const timeoutPromise = new Promise((_, reject) => 
         setTimeout(() => reject(new Error("Request timed out. Please check your internet connection or try again.")), 15000)
       );
 
-      // CRITICAL FIX: Adding .select() ensures Supabase returns a response immediately, preventing hangs
       const savePromise = supabase
         .from('app_content')
         .upsert({ id: 'main', content: subjects }, { onConflict: 'id' })
         .select();
 
-      // Race against timeout
       const result: any = await Promise.race([savePromise, timeoutPromise]);
       const { error } = result;
 
       if (error) throw error;
       
-      // Try to refresh global state
       try {
         await refreshSubjects();
       } catch (refErr) {
@@ -122,27 +121,49 @@ const AdminDashboard: React.FC = () => {
     }
   };
 
-  const handleAIContentGen = async () => {
+  const generateContentWithAI = async (promptContext: string, imagePart?: any) => {
     const currentLecture = subjects[activeSubjectIdx].lectures[activeLectureIdx];
-    if (!currentLecture.title) {
+    if (!currentLecture.title && !promptContext) {
         setMsg({ type: 'error', text: 'Please provide a lecture title first.' });
         return;
     }
 
     setGeneratingAI(true);
-    setMsg({ type: 'info', text: 'AI is generating content for "' + currentLecture.title + '"...' });
-    
+    setMsg({ type: 'info', text: 'AI is analyzing and generating content...' });
+
     try {
         const ai = new GoogleGenAI({ apiKey: (process as any).env.API_KEY });
-        const response = await ai.models.generateContent({
-            model: 'gemini-3-flash-preview',
-            contents: `Generate a comprehensive university-level lecture content for the topic: "${currentLecture.title}". 
+        
+        // If image provided, use gemini-2.5-flash-image, else use gemini-3-flash-preview
+        const modelName = imagePart ? 'gemini-2.5-flash-image' : 'gemini-3-flash-preview';
+        
+        const systemPrompt = `Generate a comprehensive university-level lecture content.
             The subject is "${subjects[activeSubjectIdx].title}".
+            Lecture Context: ${promptContext || currentLecture.title}
+            
             Provide:
             1. A detailed summary in Markdown format (use headers, bold text, and bullet points).
-            2. A list of 5 key topics (short phrases).
+            2. A list of 5 key topics.
             3. 5 flashcards (question and answer).
-            4. 5 quiz questions (question, 4 options, and correct index 0-3).`,
+            4. 5 quiz questions. Mix "multiple-choice" and "short-answer" types.
+               - For multiple-choice, provide 4 options and correctIndex.
+               - For short-answer, provide a "modelAnswer".`;
+
+        let contents: any;
+        if (imagePart) {
+             contents = {
+                parts: [
+                    imagePart,
+                    { text: systemPrompt }
+                ]
+            };
+        } else {
+             contents = systemPrompt;
+        }
+
+        const response = await ai.models.generateContent({
+            model: modelName,
+            contents: contents,
             config: {
                 responseMimeType: "application/json",
                 responseSchema: {
@@ -166,11 +187,13 @@ const AdminDashboard: React.FC = () => {
                             items: {
                                 type: Type.OBJECT,
                                 properties: {
+                                    type: { type: Type.STRING, enum: ['multiple-choice', 'short-answer'] },
                                     question: { type: Type.STRING },
                                     options: { type: Type.ARRAY, items: { type: Type.STRING } },
-                                    correctIndex: { type: Type.INTEGER }
+                                    correctIndex: { type: Type.INTEGER },
+                                    modelAnswer: { type: Type.STRING }
                                 },
-                                required: ['question', 'options', 'correctIndex']
+                                required: ['question', 'type']
                             }
                         }
                     },
@@ -187,7 +210,14 @@ const AdminDashboard: React.FC = () => {
             summary: data.summary,
             topics: data.topics,
             flashcards: data.flashcards,
-            quiz: data.quiz.map((q: any, i: number) => ({ ...q, id: Date.now() + i }))
+            quiz: data.quiz.map((q: any, i: number) => ({ 
+                ...q, 
+                id: Date.now() + i,
+                // Sanitize fields based on type
+                options: q.type === 'short-answer' ? [] : (q.options || []),
+                correctIndex: q.type === 'short-answer' ? -1 : (q.correctIndex || 0),
+                modelAnswer: q.type === 'short-answer' ? (q.modelAnswer || 'No model answer provided.') : undefined
+            }))
         };
         newSubs[activeSubjectIdx].lectures[activeLectureIdx] = updatedLecture;
         
@@ -201,80 +231,35 @@ const AdminDashboard: React.FC = () => {
     }
   };
 
-  const handleAIContentGenFromTopic = async () => {
+  const handleAIContentGen = () => generateContentWithAI("");
+
+  const handleAIContentGenFromTopic = () => {
     const topic = window.prompt("Enter a specific topic or focus for this lecture content:");
-    if (!topic) return;
+    if (topic) generateContentWithAI(topic);
+  };
 
-    setGeneratingAI(true);
-    setMsg({ type: 'info', text: 'AI is generating content for "' + topic.substring(0, 20) + (topic.length > 20 ? '...' : '') + '"' });
-    
-    try {
-        const ai = new GoogleGenAI({ apiKey: (process as any).env.API_KEY });
-        const response = await ai.models.generateContent({
-            model: 'gemini-3-flash-preview',
-            contents: `Generate a comprehensive university-level lecture content based on this specific topic/description: "${topic}". 
-            The subject context is "${subjects[activeSubjectIdx].title}".
-            Provide:
-            1. A detailed summary in Markdown format (use headers, bold text, and bullet points).
-            2. A list of 5 key topics (short phrases).
-            3. 5 flashcards (question and answer).
-            4. 5 quiz questions (question, 4 options, and correct index 0-3).`,
-            config: {
-                responseMimeType: "application/json",
-                responseSchema: {
-                    type: Type.OBJECT,
-                    properties: {
-                        summary: { type: Type.STRING },
-                        topics: { type: Type.ARRAY, items: { type: Type.STRING } },
-                        flashcards: {
-                            type: Type.ARRAY,
-                            items: {
-                                type: Type.OBJECT,
-                                properties: {
-                                    question: { type: Type.STRING },
-                                    answer: { type: Type.STRING }
-                                },
-                                required: ['question', 'answer']
-                            }
-                        },
-                        quiz: {
-                            type: Type.ARRAY,
-                            items: {
-                                type: Type.OBJECT,
-                                properties: {
-                                    question: { type: Type.STRING },
-                                    options: { type: Type.ARRAY, items: { type: Type.STRING } },
-                                    correctIndex: { type: Type.INTEGER }
-                                },
-                                required: ['question', 'options', 'correctIndex']
-                            }
-                        }
-                    },
-                    required: ['summary', 'topics', 'flashcards', 'quiz']
-                }
-            }
-        });
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
 
-        const data = JSON.parse(response.text);
-        
-        const newSubs = [...subjects];
-        const updatedLecture = {
-            ...newSubs[activeSubjectIdx].lectures[activeLectureIdx],
-            summary: data.summary,
-            topics: data.topics,
-            flashcards: data.flashcards,
-            quiz: data.quiz.map((q: any, i: number) => ({ ...q, id: Date.now() + i }))
-        };
-        newSubs[activeSubjectIdx].lectures[activeLectureIdx] = updatedLecture;
-        
-        setSubjects(newSubs);
-        setMsg({ type: 'success', text: 'AI generated content successfully!' });
-    } catch (err: any) {
-        console.error("AI Generation Error:", err);
-        setMsg({ type: 'error', text: 'AI Generation failed: ' + err.message });
-    } finally {
-        setGeneratingAI(false);
-    }
+      const reader = new FileReader();
+      reader.onload = async (event) => {
+          const base64Data = (event.target?.result as string).split(',')[1];
+          const mimeType = file.type;
+          
+          // Construct image part
+          const imagePart = {
+              inlineData: {
+                  data: base64Data,
+                  mimeType: mimeType
+              }
+          };
+          
+          await generateContentWithAI("Generate content based on this uploaded file.", imagePart);
+      };
+      reader.readAsDataURL(file);
+      // Reset input
+      e.target.value = '';
   };
 
   // --- HANDLERS ---
@@ -515,13 +500,13 @@ const AdminDashboard: React.FC = () => {
 
     const addQuizQ = () => {
         const quiz = lecture.quiz || [];
-        const newQ: QuizQuestion = { id: Date.now(), question: '', options: ['', '', '', ''], correctIndex: 0 };
+        const newQ: QuizQuestion = { id: Date.now(), type: 'multiple-choice', question: '', options: ['', '', '', ''], correctIndex: 0 };
         updateLecture('quiz', [...quiz, newQ]);
     };
     const updateQuizQ = (idx: number, field: keyof QuizQuestion | 'option', val: any, optIdx?: number) => {
         const quiz = [...(lecture.quiz || [])];
-        if (field === 'option' && typeof optIdx === 'number') {
-            quiz[idx].options[optIdx] = val;
+        if (field === 'option' && typeof optIdx === 'number' && quiz[idx].options) {
+            quiz[idx].options![optIdx] = val;
         } else {
             // @ts-ignore
             quiz[idx][field] = val;
@@ -549,6 +534,13 @@ const AdminDashboard: React.FC = () => {
                 <div className="flex gap-2">
                     {editMode === 'VISUAL' && (
                         <>
+                        <input 
+                            type="file" 
+                            ref={fileInputRef} 
+                            onChange={handleFileChange} 
+                            accept="image/*,application/pdf,text/*"
+                            className="hidden"
+                        />
                          <button 
                             onClick={handleAIContentGen}
                             disabled={generatingAI}
@@ -564,6 +556,14 @@ const AdminDashboard: React.FC = () => {
                         >
                             {generatingAI ? <Sparkles size={16} className="animate-spin" /> : <MessageSquarePlus size={16} />}
                             AI from Topic
+                        </button>
+                        <button 
+                            onClick={() => fileInputRef.current?.click()}
+                            disabled={generatingAI}
+                            className="flex items-center gap-2 px-4 py-1.5 bg-gradient-to-r from-orange-500 to-red-500 text-white rounded-lg hover:from-orange-600 hover:to-red-600 transition-all shadow-md hover:shadow-lg disabled:opacity-50"
+                        >
+                            {generatingAI ? <Sparkles size={16} className="animate-spin" /> : <UploadCloud size={16} />}
+                            AI from File
                         </button>
                         </>
                     )}
@@ -664,27 +664,48 @@ const AdminDashboard: React.FC = () => {
                         </div>
                         <div className="space-y-4">
                             {lecture.quiz?.map((q, qIdx) => (
-                                <div key={q.id || qIdx} className="p-4 bg-gray-50 dark:bg-gray-900/50 rounded-lg border border-gray-100 dark:border-gray-700 group">
+                                <div key={q.id || qIdx} className="p-4 bg-gray-50 dark:bg-gray-900/50 rounded-lg border border-gray-100 dark:border-gray-700 group relative">
                                     <div className="flex gap-2 mb-3">
+                                        <select 
+                                            value={q.type || 'multiple-choice'} 
+                                            onChange={(e) => updateQuizQ(qIdx, 'type', e.target.value)}
+                                            className="p-2 text-sm border rounded bg-white dark:bg-gray-800 dark:border-gray-600 font-medium w-36"
+                                        >
+                                            <option value="multiple-choice">Multiple Choice</option>
+                                            <option value="short-answer">Short Answer</option>
+                                        </select>
                                         <input value={q.question} onChange={(e) => updateQuizQ(qIdx, 'question', e.target.value)} placeholder="Question" className="flex-1 p-2 text-sm border rounded bg-white dark:bg-gray-800 dark:border-gray-600 font-medium" />
                                         <button onClick={() => deleteQuizQ(qIdx)} className="text-red-400 hover:text-red-600 p-1"><Trash2 size={16} /></button>
                                     </div>
-                                    <div className="grid grid-cols-2 gap-2 mb-3">
-                                        {q.options.map((opt, oIdx) => (
-                                            <div key={oIdx} className="relative">
-                                                <input 
-                                                    value={opt} 
-                                                    onChange={(e) => updateQuizQ(qIdx, 'option', e.target.value, oIdx)} 
-                                                    placeholder={`Option ${oIdx+1}`} 
-                                                    className={`w-full p-2 pl-8 text-sm border rounded bg-white dark:bg-gray-800 ${q.correctIndex === oIdx ? 'border-green-500 ring-1 ring-green-500' : 'dark:border-gray-600'}`} 
-                                                />
-                                                <button 
-                                                    onClick={() => updateQuizQ(qIdx, 'correctIndex', oIdx)}
-                                                    className={`absolute left-2 top-2.5 w-4 h-4 rounded-full border ${q.correctIndex === oIdx ? 'bg-green-500 border-green-600' : 'bg-gray-100 dark:bg-gray-700 border-gray-300 dark:border-gray-500'}`}
-                                                />
-                                            </div>
-                                        ))}
-                                    </div>
+                                    
+                                    {q.type === 'multiple-choice' ? (
+                                        <div className="grid grid-cols-2 gap-2 mb-3">
+                                            {q.options?.map((opt, oIdx) => (
+                                                <div key={oIdx} className="relative">
+                                                    <input 
+                                                        value={opt} 
+                                                        onChange={(e) => updateQuizQ(qIdx, 'option', e.target.value, oIdx)} 
+                                                        placeholder={`Option ${oIdx+1}`} 
+                                                        className={`w-full p-2 pl-8 text-sm border rounded bg-white dark:bg-gray-800 ${q.correctIndex === oIdx ? 'border-green-500 ring-1 ring-green-500' : 'dark:border-gray-600'}`} 
+                                                    />
+                                                    <button 
+                                                        onClick={() => updateQuizQ(qIdx, 'correctIndex', oIdx)}
+                                                        className={`absolute left-2 top-2.5 w-4 h-4 rounded-full border ${q.correctIndex === oIdx ? 'bg-green-500 border-green-600' : 'bg-gray-100 dark:bg-gray-700 border-gray-300 dark:border-gray-500'}`}
+                                                    />
+                                                </div>
+                                            ))}
+                                        </div>
+                                    ) : (
+                                        <div className="mb-3">
+                                            <label className="block text-xs text-gray-500 mb-1">Model Answer (for AI grading)</label>
+                                            <textarea 
+                                                value={q.modelAnswer || ''} 
+                                                onChange={(e) => updateQuizQ(qIdx, 'modelAnswer', e.target.value)} 
+                                                placeholder="Enter the ideal answer here..." 
+                                                className="w-full p-2 text-sm border rounded bg-white dark:bg-gray-800 dark:border-gray-600 h-20"
+                                            />
+                                        </div>
+                                    )}
                                 </div>
                             ))}
                         </div>

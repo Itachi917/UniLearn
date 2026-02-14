@@ -1,3 +1,4 @@
+
 export type Language = 'en' | 'ar';
 
 export interface Flashcard {
@@ -5,11 +6,15 @@ export interface Flashcard {
   answer: string;
 }
 
+export type QuestionType = 'multiple-choice' | 'short-answer';
+
 export interface QuizQuestion {
   id: number;
+  type: QuestionType;
   question: string;
-  options: string[];
-  correctIndex: number;
+  options?: string[]; // For multiple-choice
+  correctIndex?: number; // For multiple-choice
+  modelAnswer?: string; // For short-answer AI grading
 }
 
 export interface Lecture {

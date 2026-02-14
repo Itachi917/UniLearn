@@ -1,3 +1,4 @@
+
 import { Subject, Lecture } from './types';
 
 // Seed Data Configuration
@@ -34,12 +35,14 @@ export const SEED_DATA: Subject[] = [
         quiz: [
           {
             id: 1,
+            type: 'multiple-choice',
             question: "Which component is considered the intermediary between user and hardware?",
             options: ["Application Programs", "Operating System", "CPU", "Compiler"],
             correctIndex: 1
           },
           {
             id: 2,
+            type: 'multiple-choice',
             question: "Where is the Bootstrap program stored?",
             options: ["RAM", "Hard Disk", "ROM", "Cache"],
             correctIndex: 2
@@ -72,12 +75,14 @@ export const SEED_DATA: Subject[] = [
         quiz: [
           {
             id: 1,
+            type: 'multiple-choice',
             question: "Which state represents a process waiting for a processor?",
             options: ["Waiting", "Ready", "New", "Running"],
             correctIndex: 1
           },
           {
             id: 2,
+            type: 'multiple-choice',
             question: "What does PCB stand for?",
             options: ["Program Control Block", "Process Control Block", "Process Central Board", "Program Central Bus"],
             correctIndex: 1
@@ -127,12 +132,14 @@ export const SEED_DATA: Subject[] = [
         quiz: [
           {
             id: 1,
+            type: 'multiple-choice',
             question: "Which of these is a Payment Gateway?",
             options: ["Salesforce", "Magento", "Stripe", "Apache"],
             correctIndex: 2
           },
           {
             id: 2,
+            type: 'multiple-choice',
             question: "What is the purpose of a CDN?",
             options: ["To encrypt data", "To distribute content for faster load times", "To manage customer relationships", "To process payments"],
             correctIndex: 1
