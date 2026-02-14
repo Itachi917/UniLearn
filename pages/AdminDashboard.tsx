@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import Navbar from '../components/layout/Navbar';
 import { useApp } from '../context/AppContext';
 import { supabase } from '../lib/supabase';
-import { Save, Plus, Trash2, Edit, ArrowLeft, ChevronRight, Layers, Book, BrainCircuit, Users, Database } from 'lucide-react';
+import { Save, Plus, Trash2, Edit, ArrowLeft, Layers, Book, BrainCircuit, Users, Database, FileJson, Check, X } from 'lucide-react';
 import { Subject, Lecture, Flashcard, QuizQuestion } from '../types';
 
 type ViewMode = 'SUBJECT_LIST' | 'SUBJECT_EDIT' | 'LECTURE_EDIT' | 'STUDENT_LIST';
@@ -28,6 +28,10 @@ const AdminDashboard: React.FC = () => {
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState<{type: 'success' | 'error', text: string} | null>(null);
 
+  // JSON Edit State
+  const [editMode, setEditMode] = useState<'VISUAL' | 'JSON'>('VISUAL');
+  const [jsonText, setJsonText] = useState('');
+
   // Student State
   const [students, setStudents] = useState<StudentData[]>([]);
   const [loadingStudents, setLoadingStudents] = useState(false);
@@ -42,15 +46,12 @@ const AdminDashboard: React.FC = () => {
   const fetchStudents = async () => {
       setLoadingStudents(true);
       try {
-          // 1. Get Profiles
           const { data: profiles, error: pError } = await supabase.from('profiles').select('*');
           if (pError) throw pError;
 
-          // 2. Get Progress
           const { data: progress, error: prError } = await supabase.from('user_progress').select('*');
           if (prError) throw prError;
 
-          // 3. Merge
           const merged: StudentData[] = profiles.map((p: any) => {
               const prog = progress.find((pr: any) => pr.user_id === p.id)?.progress_data || {};
               const completedCount = prog.completedLectures?.length || 0;
@@ -92,7 +93,7 @@ const AdminDashboard: React.FC = () => {
 
       if (error) throw error;
       
-      await refreshSubjects(); // Sync context
+      await refreshSubjects();
       setMsg({ type: 'success', text: 'Changes saved successfully!' });
       setTimeout(() => setMsg(null), 3000);
     } catch (err: any) {
@@ -103,7 +104,7 @@ const AdminDashboard: React.FC = () => {
     }
   };
 
-  // --- HANDLERS (Same as before) ---
+  // --- HANDLERS ---
   const handleAddSubject = () => {
     const newSubject: Subject = {
       id: `sub-${Date.now()}`,
@@ -218,6 +219,249 @@ const AdminDashboard: React.FC = () => {
     </div>
   );
 
+  const renderSubjectEdit = () => {
+    const subject = subjects[activeSubjectIdx];
+    return (
+        <div className="space-y-8">
+            <div className="flex items-center gap-4">
+                <button onClick={() => setView('SUBJECT_LIST')} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full">
+                    <ArrowLeft size={24} />
+                </button>
+                <h2 className="text-xl font-bold">Edit Subject</h2>
+            </div>
+            
+            <div className="bg-white dark:bg-gray-800 p-6 rounded-xl border border-gray-200 dark:border-gray-700 space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label className="block text-xs text-gray-500 mb-1">Title (EN)</label>
+                        <input value={subject.title} onChange={(e) => { const n = [...subjects]; n[activeSubjectIdx].title = e.target.value; setSubjects(n); }} className="w-full p-2 border rounded-lg bg-transparent dark:border-gray-600" />
+                    </div>
+                    <div>
+                        <label className="block text-xs text-gray-500 mb-1">Title (AR)</label>
+                        <input value={subject.titleAr} onChange={(e) => { const n = [...subjects]; n[activeSubjectIdx].titleAr = e.target.value; setSubjects(n); }} className="w-full p-2 border rounded-lg bg-transparent dark:border-gray-600 text-right" />
+                    </div>
+                    <div>
+                        <label className="block text-xs text-gray-500 mb-1">Color Theme</label>
+                        <select 
+                            value={subject.color} 
+                            onChange={(e) => { const n = [...subjects]; n[activeSubjectIdx].color = e.target.value; setSubjects(n); }}
+                            className="w-full p-2 border rounded-lg bg-transparent dark:border-gray-600 dark:bg-gray-800"
+                        >
+                            <option value="blue">Blue</option>
+                            <option value="emerald">Emerald</option>
+                            <option value="indigo">Indigo</option>
+                            <option value="purple">Purple</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <div>
+                <div className="flex justify-between items-center mb-4">
+                    <h3 className="text-lg font-semibold flex items-center gap-2"><Layers size={20} /> Lectures</h3>
+                    <button onClick={handleAddLecture} className="text-sm flex items-center gap-1 px-3 py-1.5 bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 rounded-lg hover:bg-blue-200"><Plus size={16} /> Add Lecture</button>
+                </div>
+                <div className="space-y-3">
+                    {subject.lectures.map((lec, idx) => (
+                        <div key={lec.id} className="flex items-center justify-between p-4 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg">
+                            <span className="font-medium text-gray-900 dark:text-white">{lec.title}</span>
+                            <div className="flex gap-2">
+                                <button onClick={() => { setActiveLectureIdx(idx); setEditMode('VISUAL'); setView('LECTURE_EDIT'); }} className="p-2 text-blue-600 bg-blue-50 dark:bg-blue-900/20 rounded"><Edit size={16} /></button>
+                                <button onClick={() => handleDeleteLecture(idx)} className="p-2 text-red-500 bg-red-50 dark:bg-red-900/20 rounded"><Trash2 size={16} /></button>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            </div>
+        </div>
+    );
+  };
+
+  const renderLectureEdit = () => {
+    const lecture = subjects[activeSubjectIdx].lectures[activeLectureIdx];
+
+    const updateLecture = (field: keyof Lecture, value: any) => {
+        const newSubs = [...subjects];
+        newSubs[activeSubjectIdx].lectures[activeLectureIdx] = { ...newSubs[activeSubjectIdx].lectures[activeLectureIdx], [field]: value };
+        setSubjects(newSubs);
+    };
+
+    // --- JSON Logic ---
+    const handleEnterJsonMode = () => {
+        setJsonText(JSON.stringify(lecture, null, 2));
+        setEditMode('JSON');
+    };
+
+    const handleApplyJson = () => {
+        try {
+            const parsed = JSON.parse(jsonText);
+            if (!parsed.id || !parsed.title) throw new Error("JSON must include at least an id and title");
+            
+            const newSubs = [...subjects];
+            newSubs[activeSubjectIdx].lectures[activeLectureIdx] = parsed;
+            setSubjects(newSubs);
+            setEditMode('VISUAL');
+            setMsg({ type: 'success', text: 'JSON applied successfully' });
+            setTimeout(() => setMsg(null), 3000);
+        } catch (e: any) {
+            setMsg({ type: 'error', text: 'Invalid JSON: ' + e.message });
+        }
+    };
+
+    // --- Visual Editor Helpers ---
+    const addFlashcard = () => {
+        const cards = [...(lecture.flashcards || []), { question: '', answer: '' }];
+        updateLecture('flashcards', cards);
+    };
+    const updateFlashcard = (idx: number, field: keyof Flashcard, val: string) => {
+        const cards = [...lecture.flashcards];
+        cards[idx] = { ...cards[idx], [field]: val };
+        updateLecture('flashcards', cards);
+    };
+    const deleteFlashcard = (idx: number) => {
+        const cards = [...lecture.flashcards];
+        cards.splice(idx, 1);
+        updateLecture('flashcards', cards);
+    };
+
+    const addQuizQ = () => {
+        const quiz = lecture.quiz || [];
+        const newQ: QuizQuestion = { id: Date.now(), question: '', options: ['', '', '', ''], correctIndex: 0 };
+        updateLecture('quiz', [...quiz, newQ]);
+    };
+    const updateQuizQ = (idx: number, field: keyof QuizQuestion | 'option', val: any, optIdx?: number) => {
+        const quiz = [...(lecture.quiz || [])];
+        if (field === 'option' && typeof optIdx === 'number') {
+            quiz[idx].options[optIdx] = val;
+        } else {
+            // @ts-ignore
+            quiz[idx][field] = val;
+        }
+        updateLecture('quiz', quiz);
+    };
+    const deleteQuizQ = (idx: number) => {
+        const quiz = [...(lecture.quiz || [])];
+        quiz.splice(idx, 1);
+        updateLecture('quiz', quiz);
+    };
+
+    return (
+        <div className="space-y-8">
+            <div className="flex items-center justify-between">
+                <div className="flex items-center gap-4">
+                    <button onClick={() => setView('SUBJECT_EDIT')} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full">
+                        <ArrowLeft size={24} />
+                    </button>
+                    <h2 className="text-xl font-bold">
+                        {editMode === 'JSON' ? 'Edit Raw JSON' : 'Edit Lecture'}
+                    </h2>
+                </div>
+
+                <div className="flex gap-2">
+                    {editMode === 'VISUAL' ? (
+                        <button 
+                            onClick={handleEnterJsonMode}
+                            className="flex items-center gap-2 px-3 py-1.5 bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700"
+                        >
+                            <FileJson size={16} /> JSON Editor
+                        </button>
+                    ) : (
+                        <div className="flex gap-2">
+                             <button 
+                                onClick={() => setEditMode('VISUAL')}
+                                className="flex items-center gap-2 px-3 py-1.5 bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300 rounded-lg"
+                            >
+                                <X size={16} /> Cancel
+                            </button>
+                            <button 
+                                onClick={handleApplyJson}
+                                className="flex items-center gap-2 px-3 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                            >
+                                <Check size={16} /> Apply JSON
+                            </button>
+                        </div>
+                    )}
+                </div>
+            </div>
+
+            {editMode === 'JSON' ? (
+                <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
+                    <div className="bg-gray-50 dark:bg-gray-900/50 px-4 py-2 text-xs font-mono text-gray-500 border-b border-gray-200 dark:border-gray-700">
+                        Edit the lecture object directly. Changes will update the interface immediately but must be saved to database using "Save Content Changes" at the top.
+                    </div>
+                    <textarea 
+                        value={jsonText}
+                        onChange={(e) => setJsonText(e.target.value)}
+                        className="w-full h-[600px] p-4 font-mono text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none resize-y"
+                        spellCheck={false}
+                    />
+                </div>
+            ) : (
+                <div className="space-y-8">
+                    {/* Basic Info */}
+                    <div className="bg-white dark:bg-gray-800 p-6 rounded-xl border border-gray-200 dark:border-gray-700 space-y-4">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <input value={lecture.title} onChange={(e) => updateLecture('title', e.target.value)} placeholder="Title (EN)" className="w-full p-2 border rounded-lg bg-transparent dark:border-gray-600" />
+                            <input value={lecture.titleAr} onChange={(e) => updateLecture('titleAr', e.target.value)} placeholder="Title (AR)" className="w-full p-2 border rounded-lg bg-transparent dark:border-gray-600 text-right" />
+                        </div>
+                        <div>
+                             <label className="block text-xs font-medium text-gray-500 mb-1">Topics (comma separated)</label>
+                             <input value={lecture.topics?.join(', ')} onChange={(e) => updateLecture('topics', e.target.value.split(',').map(s => s.trim()))} className="w-full p-2 border rounded-lg bg-transparent dark:border-gray-600" />
+                        </div>
+                        <textarea value={lecture.summary} onChange={(e) => updateLecture('summary', e.target.value)} placeholder="Summary (Markdown)" className="w-full h-32 p-2 border rounded-lg bg-transparent dark:border-gray-600" />
+                    </div>
+
+                    {/* Flashcards */}
+                    <div className="bg-white dark:bg-gray-800 p-6 rounded-xl border border-gray-200 dark:border-gray-700">
+                        <div className="flex justify-between items-center mb-4">
+                            <h3 className="font-semibold flex items-center gap-2"><Layers size={18}/> Flashcards</h3>
+                            <button onClick={addFlashcard} className="text-xs bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded hover:bg-gray-200">+ Add</button>
+                        </div>
+                        <div className="space-y-3">
+                            {lecture.flashcards?.map((card, idx) => (
+                                <div key={idx} className="flex gap-2 items-start p-3 bg-gray-50 dark:bg-gray-900/50 rounded-lg border border-gray-100 dark:border-gray-700">
+                                    <div className="flex-1 space-y-2">
+                                        <input value={card.question} onChange={(e) => updateFlashcard(idx, 'question', e.target.value)} placeholder="Q" className="w-full p-1.5 text-sm border rounded bg-white dark:bg-gray-800 dark:border-gray-600" />
+                                        <input value={card.answer} onChange={(e) => updateFlashcard(idx, 'answer', e.target.value)} placeholder="A" className="w-full p-1.5 text-sm border rounded bg-white dark:bg-gray-800 dark:border-gray-600" />
+                                    </div>
+                                    <button onClick={() => deleteFlashcard(idx)} className="text-red-400 hover:text-red-600"><Trash2 size={16} /></button>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+
+                    {/* Quiz */}
+                    <div className="bg-white dark:bg-gray-800 p-6 rounded-xl border border-gray-200 dark:border-gray-700">
+                        <div className="flex justify-between items-center mb-4">
+                            <h3 className="font-semibold flex items-center gap-2"><BrainCircuit size={18}/> Quiz</h3>
+                            <button onClick={addQuizQ} className="text-xs bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded hover:bg-gray-200">+ Add</button>
+                        </div>
+                        <div className="space-y-4">
+                            {lecture.quiz?.map((q, qIdx) => (
+                                <div key={q.id} className="p-4 bg-gray-50 dark:bg-gray-900/50 rounded-lg border border-gray-100 dark:border-gray-700">
+                                    <div className="flex gap-2 mb-2">
+                                        <input value={q.question} onChange={(e) => updateQuizQ(qIdx, 'question', e.target.value)} placeholder="Question" className="flex-1 p-2 text-sm border rounded bg-white dark:bg-gray-800 dark:border-gray-600 font-medium" />
+                                        <button onClick={() => deleteQuizQ(qIdx)} className="text-red-400 hover:text-red-600"><Trash2 size={16} /></button>
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-2 mb-2">
+                                        {q.options.map((opt, oIdx) => (
+                                            <input key={oIdx} value={opt} onChange={(e) => updateQuizQ(qIdx, 'option', e.target.value, oIdx)} placeholder={`Opt ${oIdx+1}`} className={`w-full p-1.5 text-sm border rounded bg-white dark:bg-gray-800 ${q.correctIndex === oIdx ? 'border-green-500 ring-1 ring-green-500' : 'dark:border-gray-600'}`} />
+                                        ))}
+                                    </div>
+                                    <div className="flex items-center gap-2 text-sm">
+                                        <span>Correct Index:</span>
+                                        <input type="number" min="0" max="3" value={q.correctIndex} onChange={(e) => updateQuizQ(qIdx, 'correctIndex', parseInt(e.target.value))} className="w-16 p-1 border rounded bg-white dark:bg-gray-800 dark:border-gray-600" />
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+  };
+
   const renderStudentList = () => (
       <div className="space-y-6">
           <div className="flex justify-between items-center">
@@ -231,9 +475,9 @@ const AdminDashboard: React.FC = () => {
                       <thead className="bg-gray-50 dark:bg-gray-900/50 text-gray-500 font-medium">
                           <tr>
                               <th className="px-6 py-4">Student</th>
-                              <th className="px-6 py-4">Lectures Completed</th>
+                              <th className="px-6 py-4">Completed</th>
                               <th className="px-6 py-4">Quiz Points</th>
-                              <th className="px-6 py-4">Last Update</th>
+                              <th className="px-6 py-4">Last Active</th>
                           </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
@@ -261,7 +505,7 @@ const AdminDashboard: React.FC = () => {
                                       </td>
                                       <td className="px-6 py-4">
                                           <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300">
-                                              {std.completed_lectures}
+                                              {std.completed_lectures} Lectures
                                           </span>
                                       </td>
                                       <td className="px-6 py-4 font-mono text-gray-600 dark:text-gray-400">
@@ -279,77 +523,6 @@ const AdminDashboard: React.FC = () => {
           </div>
       </div>
   );
-
-  // ... (renderSubjectEdit and renderLectureEdit are same as previous, simplified here to fit context)
-  const renderSubjectEdit = () => {
-    const subject = subjects[activeSubjectIdx];
-    return (
-        <div className="space-y-8">
-            <div className="flex items-center gap-4">
-                <button onClick={() => setView('SUBJECT_LIST')} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full">
-                    <ArrowLeft size={24} />
-                </button>
-                <h2 className="text-xl font-bold">Edit Subject</h2>
-            </div>
-            
-            {/* ... Fields ... */}
-            <div className="bg-white dark:bg-gray-800 p-6 rounded-xl border border-gray-200 dark:border-gray-700 space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <input value={subject.title} onChange={(e) => { const n = [...subjects]; n[activeSubjectIdx].title = e.target.value; setSubjects(n); }} className="w-full p-2 border rounded-lg bg-transparent dark:border-gray-600" />
-                    <input value={subject.titleAr} onChange={(e) => { const n = [...subjects]; n[activeSubjectIdx].titleAr = e.target.value; setSubjects(n); }} className="w-full p-2 border rounded-lg bg-transparent dark:border-gray-600 text-right" />
-                </div>
-            </div>
-
-            {/* Lectures */}
-            <div>
-                <div className="flex justify-between items-center mb-4">
-                    <h3 className="text-lg font-semibold flex items-center gap-2"><Layers size={20} /> Lectures</h3>
-                    <button onClick={handleAddLecture} className="text-sm flex items-center gap-1 px-3 py-1.5 bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 rounded-lg hover:bg-blue-200"><Plus size={16} /> Add Lecture</button>
-                </div>
-                <div className="space-y-3">
-                    {subject.lectures.map((lec, idx) => (
-                        <div key={lec.id} className="flex items-center justify-between p-4 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg">
-                            <span className="font-medium">{lec.title}</span>
-                            <div className="flex gap-2">
-                                <button onClick={() => { setActiveLectureIdx(idx); setView('LECTURE_EDIT'); }} className="p-2 text-blue-600 bg-blue-50 dark:bg-blue-900/20 rounded"><Edit size={16} /></button>
-                                <button onClick={() => handleDeleteLecture(idx)} className="p-2 text-red-500 bg-red-50 dark:bg-red-900/20 rounded"><Trash2 size={16} /></button>
-                            </div>
-                        </div>
-                    ))}
-                </div>
-            </div>
-        </div>
-    );
-  };
-
-  // Simplified renderLectureEdit for brevity in response (assumes previous logic holds)
-  const renderLectureEdit = () => {
-      // Re-implement or assume previous logic is retained if not fully replaced in `content` block
-      // To ensure full functionality I will include it.
-      const lecture = subjects[activeSubjectIdx].lectures[activeLectureIdx];
-      const updateLecture = (field: keyof Lecture, value: any) => {
-          const newSubs = [...subjects];
-          newSubs[activeSubjectIdx].lectures[activeLectureIdx] = { ...newSubs[activeSubjectIdx].lectures[activeLectureIdx], [field]: value };
-          setSubjects(newSubs);
-      };
-      // ... Helpers ...
-      return (
-        <div className="space-y-8">
-            <div className="flex items-center gap-4">
-                <button onClick={() => setView('SUBJECT_EDIT')} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full"><ArrowLeft size={24} /></button>
-                <h2 className="text-xl font-bold">Edit Lecture</h2>
-            </div>
-            <div className="bg-white dark:bg-gray-800 p-6 rounded-xl border border-gray-200 dark:border-gray-700 space-y-4">
-                <input value={lecture.title} onChange={(e) => updateLecture('title', e.target.value)} className="w-full p-2 border rounded-lg bg-transparent dark:border-gray-600" />
-                <textarea value={lecture.summary} onChange={(e) => updateLecture('summary', e.target.value)} className="w-full h-32 p-2 border rounded-lg bg-transparent dark:border-gray-600" />
-            </div>
-             {/* Flashcards & Quiz Editors (Simplified visual representation) */}
-             <div className="p-4 bg-gray-50 dark:bg-gray-800 rounded border border-gray-200 dark:border-gray-700 text-center text-gray-500">
-                 Detailed Flashcard/Quiz Editor (See previous version for full code, integrated here)
-             </div>
-        </div>
-      );
-  };
 
   if (!isAdmin) {
     return <div className="p-12 text-center text-red-500">Access Denied</div>;

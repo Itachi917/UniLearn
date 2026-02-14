@@ -160,6 +160,46 @@ export const SEED_DATA: Subject[] = [
     lectures: [
         { id: 'lec-anim-1', title: 'Lecture 1: Principles of Animation', titleAr: 'المحاضرة 1: مبادئ الرسوم المتحركة', summary: 'Squash and stretch, anticipation, staging.', flashcards: [], quiz: [] }
     ]
+  },
+  {
+    id: 'sub-bi',
+    title: 'Introduction to Business Intelligence',
+    titleAr: 'مقدمة في ذكاء الأعمال',
+    level: 'Level-2',
+    color: 'indigo',
+    lectures: [
+        { id: 'lec-bi-1', title: 'Lecture 1: What is BI?', titleAr: 'المحاضرة 1: ما هو ذكاء الأعمال؟', summary: 'Business Intelligence (BI) refers to the procedural and technical infrastructure that collects, stores, and analyzes the data produced by a company’s activities.', flashcards: [], quiz: [] }
+    ]
+  },
+  {
+    id: 'sub-se',
+    title: 'Software Engineering',
+    titleAr: 'هندسة البرمجيات',
+    level: 'Level-2',
+    color: 'blue',
+    lectures: [
+        { id: 'lec-se-1', title: 'Lecture 1: SDLC', titleAr: 'المحاضرة 1: دورة حياة تطوير البرمجيات', summary: 'SDLC stands for Software Development Life Cycle.', flashcards: [], quiz: [] }
+    ]
+  },
+  {
+    id: 'sub-dmd',
+    title: 'Digital Media Design',
+    titleAr: 'تصميم الوسائط الرقمية',
+    level: 'Level-2',
+    color: 'purple',
+    lectures: [
+        { id: 'lec-dmd-1', title: 'Lecture 1: Color Theory', titleAr: 'المحاضرة 1: نظرية الألوان', summary: 'Understanding how colors interact, combine, and impact perception.', flashcards: [], quiz: [] }
+    ]
+  },
+  {
+    id: 'sub-db',
+    title: 'Advanced Database Systems',
+    titleAr: 'نظم قواعد البيانات المتقدمة',
+    level: 'Level-2',
+    color: 'emerald',
+    lectures: [
+        { id: 'lec-db-1', title: 'Lecture 1: Normalization', titleAr: 'المحاضرة 1: التطبيع', summary: 'Database normalization is the process of structuring a relational database in accordance with a series of so-called normal forms in order to reduce data redundancy and improve data integrity.', flashcards: [], quiz: [] }
+    ]
   }
 ];
 
@@ -201,6 +241,12 @@ export const TRANSLATIONS = {
     dashboard: "Dashboard",
     backToSubjects: "Back to Subjects",
     backToLevels: "Back to Levels",
+    manageSubjects: "Manage Subjects",
+    welcomeTitle: "Welcome to UniLearn!",
+    selectSubjectsPrompt: "Please select the subjects you are currently enrolled in to personalize your dashboard.",
+    startLearning: "Start Learning",
+    selectAll: "Select All",
+    deselectAll: "Deselect All",
   },
   ar: {
     login: "تسجيل الدخول",
@@ -239,5 +285,11 @@ export const TRANSLATIONS = {
     dashboard: "لوحة التحكم",
     backToSubjects: "العودة للمواد",
     backToLevels: "العودة للمستويات",
+    manageSubjects: "إدارة المواد",
+    welcomeTitle: "مرحباً بك في UniLearn!",
+    selectSubjectsPrompt: "يرجى اختيار المواد المسجلة حالياً لتخصيص لوحة التحكم الخاصة بك.",
+    startLearning: "ابدأ التعلم",
+    selectAll: "تحديد الكل",
+    deselectAll: "إلغاء تحديد الكل",
   }
 };

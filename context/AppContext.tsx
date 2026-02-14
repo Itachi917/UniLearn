@@ -17,6 +17,7 @@ interface AppContextType {
   markLectureComplete: (lectureId: string) => void;
   updateQuizScore: (lectureId: string, score: number) => void;
   updateUserProfile: (name: string, avatarUrl: string) => Promise<void>;
+  enrollSubjects: (subjectIds: string[]) => void;
   t: (key: keyof typeof TRANSLATIONS['en']) => string;
   loginAsGuest: () => void;
   logout: () => void;
@@ -32,7 +33,8 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
   const [progress, setProgress] = useState<UserProgress>({
     completedLectures: [],
-    quizScores: {}
+    quizScores: {},
+    enrolledSubjectIds: undefined // Undefined initially allows checking for "first time"
   });
   const [subjects, setSubjects] = useState<Subject[]>(SEED_DATA);
   const [isLoading, setIsLoading] = useState(true);
@@ -136,14 +138,14 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
             id: user.uid,
             full_name: name,
             avatar_url: avatarUrl,
-            updated_at: new Date(),
+            updated_at: new Date().toISOString(),
         };
 
         const { error } = await supabase.from('profiles').upsert(updates);
         if (error) throw error;
 
-        // Update local state
-        setUser({ ...user, name, avatarUrl });
+        // Functional update ensures we use the most recent state and avoid staleness
+        setUser(prevUser => prevUser ? { ...prevUser, name, avatarUrl } : null);
     } catch (error) {
         console.error("Error updating profile:", error);
         throw error;
@@ -207,9 +209,21 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     });
   };
 
+  const enrollSubjects = (subjectIds: string[]) => {
+      saveProgress({
+          ...progress,
+          enrolledSubjectIds: subjectIds
+      });
+  };
+
   const loginAsGuest = () => {
     setUser({ uid: 'guest', email: null, isGuest: true, name: 'Guest Student' });
-    setProgress({ completedLectures: [], quizScores: {} });
+    // Guests see all subjects by default or none? Let's give them all for exploration
+    setProgress({ 
+        completedLectures: [], 
+        quizScores: {},
+        enrolledSubjectIds: SEED_DATA.map(s => s.id) 
+    });
   };
 
   const logout = async () => {
@@ -243,6 +257,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
       markLectureComplete,
       updateQuizScore,
       updateUserProfile,
+      enrollSubjects,
       t,
       loginAsGuest,
       logout,

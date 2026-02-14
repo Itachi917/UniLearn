@@ -35,6 +35,7 @@ export interface UserProgress {
   completedLectures: string[]; // IDs of completed lectures
   lastVisitedLectureId?: string;
   quizScores: Record<string, number>; // lectureId -> score
+  enrolledSubjectIds?: string[]; // IDs of subjects the user has chosen
 }
 
 export interface User {

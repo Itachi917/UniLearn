@@ -1,14 +1,20 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import Navbar from '../components/layout/Navbar';
 import { useApp } from '../context/AppContext';
 import { Link } from 'react-router-dom';
-import { User as UserIcon, Award, BookOpen, Clock, ChevronRight, Save, Camera } from 'lucide-react';
+import { User as UserIcon, Award, BookOpen, Clock, ChevronRight, Upload, Camera } from 'lucide-react';
+import { supabase } from '../lib/supabase';
 
 const UserProfile: React.FC = () => {
   const { user, progress, subjects, t, updateUserProfile } = useApp();
   const [isEditing, setIsEditing] = useState(false);
   const [name, setName] = useState(user?.name || '');
-  const [avatarUrl, setAvatarUrl] = useState(user?.avatarUrl || '');
+  
+  // File upload state
+  const [avatarFile, setAvatarFile] = useState<File | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState('');
 
@@ -18,26 +24,56 @@ const UserProfile: React.FC = () => {
   const completedCount = progress.completedLectures.length;
   const overallProgress = totalLectures > 0 ? Math.round((completedCount / totalLectures) * 100) : 0;
   
-  // Calculate Average Quiz Score
   const quizIds = Object.keys(progress.quizScores);
   const avgQuizScore = quizIds.length > 0 
-    ? Math.round(Object.values(progress.quizScores).reduce((a, b) => a + b, 0) / quizIds.length) // Simplified
+    ? Math.round(Object.values(progress.quizScores).reduce((a, b) => a + b, 0) / quizIds.length) 
     : 0;
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      const file = e.target.files[0];
+      setAvatarFile(file);
+      setPreviewUrl(URL.createObjectURL(file));
+    }
+  };
 
   const handleSave = async () => {
     setLoading(true);
     setMsg('');
     try {
-        await updateUserProfile(name, avatarUrl);
+        let finalAvatarUrl = user.avatarUrl || '';
+
+        if (avatarFile) {
+            const fileExt = avatarFile.name.split('.').pop();
+            const fileName = `${user.uid}-${Date.now()}.${fileExt}`;
+
+            const { error: uploadError } = await supabase.storage
+                .from('avatars')
+                .upload(fileName, avatarFile, { upsert: true });
+
+            if (uploadError) throw new Error('Upload failed. Create an "avatars" bucket in Supabase.');
+
+            const { data } = supabase.storage
+                .from('avatars')
+                .getPublicUrl(fileName);
+            
+            finalAvatarUrl = data.publicUrl;
+        }
+
+        await updateUserProfile(name, finalAvatarUrl);
         setMsg('Profile updated successfully!');
         setIsEditing(false);
+        setAvatarFile(null);
+        setPreviewUrl(null);
         setTimeout(() => setMsg(''), 3000);
-    } catch (e) {
-        setMsg('Failed to update profile.');
+    } catch (e: any) {
+        setMsg(e.message || 'Failed to update profile.');
     } finally {
         setLoading(false);
     }
   };
+
+  const currentDisplayAvatar = previewUrl || user.avatarUrl;
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
@@ -57,12 +93,28 @@ const UserProfile: React.FC = () => {
             <div className="flex flex-col sm:flex-row items-center gap-8">
                 <div className="relative group">
                     <div className="w-28 h-28 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center text-blue-600 dark:text-blue-400 overflow-hidden border-4 border-white dark:border-gray-700 shadow-lg">
-                        {avatarUrl ? (
-                            <img src={avatarUrl} alt="Profile" className="w-full h-full object-cover" />
+                        {currentDisplayAvatar ? (
+                            <img src={currentDisplayAvatar} alt="Profile" className="w-full h-full object-cover" />
                         ) : (
                             <UserIcon size={56} />
                         )}
                     </div>
+                    {isEditing && (
+                        <button 
+                            onClick={() => fileInputRef.current?.click()}
+                            className="absolute bottom-0 right-0 p-2 bg-blue-600 text-white rounded-full hover:bg-blue-700 transition-colors shadow-md"
+                            title="Upload Photo"
+                        >
+                            <Camera size={18} />
+                        </button>
+                    )}
+                    <input 
+                        type="file" 
+                        ref={fileInputRef} 
+                        onChange={handleFileChange} 
+                        accept="image/*" 
+                        className="hidden" 
+                    />
                 </div>
 
                 <div className="flex-1 text-center sm:text-left space-y-2">
@@ -77,25 +129,22 @@ const UserProfile: React.FC = () => {
                                     placeholder="Your Name"
                                 />
                             </div>
-                            <div>
-                                <label className="block text-xs text-gray-500 mb-1 uppercase tracking-wide">Avatar Image URL</label>
-                                <input 
-                                    value={avatarUrl}
-                                    onChange={(e) => setAvatarUrl(e.target.value)}
-                                    className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-white"
-                                    placeholder="https://example.com/me.jpg"
-                                />
-                            </div>
+                            
                             <div className="flex gap-2 justify-center sm:justify-start pt-2">
                                 <button 
                                     onClick={handleSave}
                                     disabled={loading}
-                                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium disabled:opacity-50"
+                                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium disabled:opacity-50 flex items-center gap-2"
                                 >
                                     {loading ? 'Saving...' : 'Save Changes'}
                                 </button>
                                 <button 
-                                    onClick={() => setIsEditing(false)}
+                                    onClick={() => {
+                                        setIsEditing(false);
+                                        setName(user.name || '');
+                                        setAvatarFile(null);
+                                        setPreviewUrl(null);
+                                    }}
                                     disabled={loading}
                                     className="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 text-sm font-medium"
                                 >
@@ -116,7 +165,6 @@ const UserProfile: React.FC = () => {
                                     onClick={() => {
                                         setIsEditing(true);
                                         setName(user.name || '');
-                                        setAvatarUrl(user.avatarUrl || '');
                                     }}
                                     className="px-4 py-2 text-sm bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
                                 >
