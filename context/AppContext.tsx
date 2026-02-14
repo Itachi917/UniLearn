@@ -45,7 +45,6 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
 
   const refreshSubjects = async () => {
     try {
-      console.log("Fetching subjects from DB...");
       const { data, error } = await supabase
         .from('app_content')
         .select('content')
@@ -57,13 +56,8 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
         return;
       }
 
-      if (data && data.content && Array.isArray(data.content)) {
-        console.log("Subjects loaded from DB successfully.");
+      if (data && data.content) {
         setSubjects(data.content);
-      } else {
-        console.warn("No content found in DB, using SEED_DATA.");
-        // We do NOT set SEED_DATA here to avoid overwriting existing state if fetch fails temporarily
-        // unless subjects is empty? No, keep current state.
       }
     } catch (err) {
       console.error("Error executing fetch subjects:", err);
@@ -71,12 +65,9 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
   };
 
   // Re-fetch subjects when user logs in to handle RLS policies that might block unauthenticated access
-  // Also runs on mount implicitly via the auth listener logic below
   useEffect(() => {
-    if (user) {
-        refreshSubjects();
-    }
-  }, [user]);
+    refreshSubjects();
+  }, [user?.uid]);
 
   const loadUserData = async (authUser: any) => {
     try {
@@ -136,9 +127,6 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
   useEffect(() => {
     let mounted = true;
 
-    // Initial Fetch
-    refreshSubjects();
-
     const checkUser = async () => {
       try {
         const { data: { session }, error } = await supabase.auth.getSession();
@@ -169,9 +157,6 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
             if (event === 'SIGNED_OUT') {
                 setUser(null);
                 setProgress({ completedLectures: [], quizScores: {} });
-                // Reset to seed data on logout to be safe
-                setSubjects(SEED_DATA);
-                refreshSubjects(); // Try to fetch public content if available
             }
             setIsLoading(false);
         }

@@ -1,8 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { QuizQuestion } from '../../types';
 import { useApp } from '../../context/AppContext';
-import { CheckCircle, XCircle, Timer, Clock, Play, Sparkles } from 'lucide-react';
-import { GoogleGenAI, Type } from '@google/genai';
+import { CheckCircle, XCircle, Timer, Clock, Play } from 'lucide-react';
 
 interface Props {
   questions: QuizQuestion[];
@@ -14,24 +13,17 @@ const Quiz: React.FC<Props> = ({ questions, onComplete }) => {
   
   // Setup State
   const [hasStarted, setHasStarted] = useState(false);
-  const [timerMinutes, setTimerMinutes] = useState<number>(0); 
+  const [timerMinutes, setTimerMinutes] = useState<number>(0); // 0 means no timer
   const [timeLeft, setTimeLeft] = useState<number | null>(null);
 
   // Quiz State
   const [currentQIndex, setCurrentQIndex] = useState(0);
-  
-  // Multiple Choice State
   const [selectedOption, setSelectedOption] = useState<number | null>(null);
-  
-  // Short Answer State
-  const [textAnswer, setTextAnswer] = useState('');
-  const [aiFeedback, setAiFeedback] = useState<{correct: boolean, feedback: string} | null>(null);
-  const [isMarking, setIsMarking] = useState(false);
-
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [score, setScore] = useState(0);
   const [completed, setCompleted] = useState(false);
 
+  // Use ReturnType<typeof setInterval> to be environment-agnostic (works for number or NodeJS.Timeout)
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
@@ -39,7 +31,7 @@ const Quiz: React.FC<Props> = ({ questions, onComplete }) => {
       timerRef.current = setInterval(() => {
         setTimeLeft((prev) => {
           if (prev === null || prev <= 1) {
-             finishQuiz(true); 
+             finishQuiz(true); // Auto finish
              return 0;
           }
           return prev - 1;
@@ -63,6 +55,14 @@ const Quiz: React.FC<Props> = ({ questions, onComplete }) => {
   const finishQuiz = (timeRanOut = false) => {
     if (timerRef.current) clearInterval(timerRef.current);
     setCompleted(true);
+    
+    // Calculate final score based on current progress
+    // If time ran out, we don't count the current unsubmitted question
+    // If finished normally via last question, handleNext calls this logic
+    
+    // However, logic inside handleNext calculates score.
+    // If forced finish (time ran out), we keep current score.
+    
     onComplete(score); 
   };
 
@@ -74,66 +74,24 @@ const Quiz: React.FC<Props> = ({ questions, onComplete }) => {
 
   const question = questions[currentQIndex];
 
-  const markShortAnswer = async (userAns: string, modelAns: string) => {
-      setIsMarking(true);
-      try {
-          const ai = new GoogleGenAI({ apiKey: 'AIzaSyCkoVKHYFUXNwmIKGN2LEyRFX4Tqy6SAhY' });
-          const response = await ai.models.generateContent({
-              model: 'gemini-3-flash-preview',
-              contents: `Evaluate the student's answer.
-              Question: "${question.question}"
-              Model Answer: "${modelAns}"
-              Student Answer: "${userAns}"
-              
-              Task: Determine if the student answer is essentially correct based on the model answer.
-              Provide a JSON response: { "correct": boolean, "feedback": "very short explanation (1 sentence)" }`,
-              config: {
-                  responseMimeType: 'application/json',
-                  responseSchema: {
-                      type: Type.OBJECT,
-                      properties: {
-                          correct: { type: Type.BOOLEAN },
-                          feedback: { type: Type.STRING }
-                      }
-                  }
-              }
-          });
-          
-          const result = JSON.parse(response.text);
-          setAiFeedback(result);
-          if (result.correct) {
-              setScore(s => s + 1);
-          }
-      } catch (e) {
-          console.error("AI Marking Error", e);
-          setAiFeedback({ correct: false, feedback: "Error grading answer. Please try again." });
-      } finally {
-          setIsMarking(false);
-          setIsSubmitted(true);
-      }
-  };
-
   const handleSubmit = () => {
-    if (question.type === 'multiple-choice') {
-        if (selectedOption === null) return;
-        const isCorrect = selectedOption === question.correctIndex;
-        if (isCorrect) setScore(s => s + 1);
-        setIsSubmitted(true);
-    } else {
-        // Short Answer
-        if (!textAnswer.trim()) return;
-        markShortAnswer(textAnswer, question.modelAnswer || "Correctly answer the question.");
-    }
+    if (selectedOption === null) return;
+    
+    const isCorrect = selectedOption === question.correctIndex;
+    if (isCorrect) setScore(s => s + 1);
+    
+    setIsSubmitted(true);
   };
 
   const handleNext = () => {
     if (currentQIndex < questions.length - 1) {
       setCurrentQIndex(prev => prev + 1);
       setSelectedOption(null);
-      setTextAnswer('');
-      setAiFeedback(null);
       setIsSubmitted(false);
     } else {
+      // Calculate final score logic
+      // Since score is updated on submit, and this button appears after submit, 
+      // score is already up to date for the current question.
       finishQuiz();
     }
   };
@@ -194,9 +152,7 @@ const Quiz: React.FC<Props> = ({ questions, onComplete }) => {
                 setCompleted(false);
                 setIsSubmitted(false);
                 setSelectedOption(null);
-                setTextAnswer('');
-                setAiFeedback(null);
-                setHasStarted(false); 
+                setHasStarted(false); // Go back to setup
             }}
             className="mt-6 px-6 py-2 bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 rounded-lg transition-colors"
         >
@@ -236,81 +192,46 @@ const Quiz: React.FC<Props> = ({ questions, onComplete }) => {
             {question.question}
         </h3>
 
-        {/* Question Type Logic */}
-        {question.type === 'multiple-choice' ? (
-            <div className="space-y-3">
-            {question.options?.map((opt, idx) => {
-                let itemClass = "w-full text-left p-4 rounded-lg border-2 transition-all duration-200 flex justify-between items-center ";
-                
-                if (isSubmitted) {
-                    if (idx === question.correctIndex) {
-                        itemClass += "border-green-500 bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300";
-                    } else if (idx === selectedOption) {
-                        itemClass += "border-red-500 bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300";
-                    } else {
-                        itemClass += "border-gray-100 dark:border-gray-700 opacity-50";
-                    }
+        <div className="space-y-3">
+          {question.options.map((opt, idx) => {
+            let itemClass = "w-full text-left p-4 rounded-lg border-2 transition-all duration-200 flex justify-between items-center ";
+            
+            if (isSubmitted) {
+                if (idx === question.correctIndex) {
+                    itemClass += "border-green-500 bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300";
+                } else if (idx === selectedOption) {
+                    itemClass += "border-red-500 bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300";
                 } else {
-                    if (selectedOption === idx) {
-                        itemClass += "border-blue-500 bg-blue-50 dark:bg-blue-900/20";
-                    } else {
-                        itemClass += "border-gray-200 dark:border-gray-700 hover:border-blue-300 dark:hover:border-blue-700";
-                    }
+                    itemClass += "border-gray-100 dark:border-gray-700 opacity-50";
                 }
+            } else {
+                if (selectedOption === idx) {
+                    itemClass += "border-blue-500 bg-blue-50 dark:bg-blue-900/20";
+                } else {
+                    itemClass += "border-gray-200 dark:border-gray-700 hover:border-blue-300 dark:hover:border-blue-700";
+                }
+            }
 
-                return (
-                <button
-                    key={idx}
-                    onClick={() => !isSubmitted && setSelectedOption(idx)}
-                    disabled={isSubmitted}
-                    className={itemClass}
-                >
-                    <span>{opt}</span>
-                    {isSubmitted && idx === question.correctIndex && <CheckCircle size={20} />}
-                    {isSubmitted && idx === selectedOption && idx !== question.correctIndex && <XCircle size={20} />}
-                </button>
-                );
-            })}
-            </div>
-        ) : (
-            // Short Answer Input
-            <div className="space-y-4">
-                <textarea
-                    value={textAnswer}
-                    onChange={(e) => setTextAnswer(e.target.value)}
-                    disabled={isSubmitted || isMarking}
-                    placeholder="Type your answer here..."
-                    className="w-full p-4 border rounded-xl dark:bg-gray-700 dark:border-gray-600 dark:text-white min-h-[120px] focus:ring-2 focus:ring-blue-500 outline-none disabled:opacity-70"
-                />
-                
-                {isMarking && (
-                    <div className="flex items-center gap-2 text-blue-600 animate-pulse">
-                        <Sparkles size={18} />
-                        <span className="font-medium">AI is grading your answer...</span>
-                    </div>
-                )}
-                
-                {aiFeedback && (
-                    <div className={`p-4 rounded-lg border ${
-                        aiFeedback.correct 
-                        ? 'bg-green-50 border-green-200 text-green-800 dark:bg-green-900/30 dark:border-green-800 dark:text-green-300' 
-                        : 'bg-red-50 border-red-200 text-red-800 dark:bg-red-900/30 dark:border-red-800 dark:text-red-300'
-                    }`}>
-                        <div className="flex items-center gap-2 font-bold mb-1">
-                            {aiFeedback.correct ? <CheckCircle size={18} /> : <XCircle size={18} />}
-                            {aiFeedback.correct ? t('correct') : t('incorrect')}
-                        </div>
-                        <p className="text-sm">{aiFeedback.feedback}</p>
-                    </div>
-                )}
-            </div>
-        )}
+            return (
+              <button
+                key={idx}
+                onClick={() => !isSubmitted && setSelectedOption(idx)}
+                disabled={isSubmitted}
+                className={itemClass}
+              >
+                <span>{opt}</span>
+                {isSubmitted && idx === question.correctIndex && <CheckCircle size={20} />}
+                {isSubmitted && idx === selectedOption && idx !== question.correctIndex && <XCircle size={20} />}
+              </button>
+            );
+          })}
+        </div>
 
         <div className="mt-8 flex justify-end">
           {!isSubmitted ? (
             <button
               onClick={handleSubmit}
-              disabled={question.type === 'multiple-choice' ? selectedOption === null : (!textAnswer.trim() || isMarking)}
+              disabled={selectedOption === null}
               className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
               {t('submit')}
@@ -325,7 +246,7 @@ const Quiz: React.FC<Props> = ({ questions, onComplete }) => {
           )}
         </div>
         
-        {isSubmitted && question.type === 'multiple-choice' && (
+        {isSubmitted && (
             <div className={`mt-4 p-3 rounded-lg text-sm text-center font-medium ${
                 selectedOption === question.correctIndex 
                 ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300' 
