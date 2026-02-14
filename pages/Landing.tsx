@@ -87,11 +87,13 @@ const Landing: React.FC = () => {
     navigate('/levels');
   };
 
-  // Prevent flash of login form during auth check or redirect processing
-  // checking hash includes access_token handles the split second before supabase processes the OAuth redirect
-  const isProcessingAuth = isAuthLoading || (user !== null) || window.location.hash.includes('access_token');
+  // Logic to determine if we should show the loading spinner vs the form
+  // 1. If AppContext says loading -> SHOW SPINNER
+  // 2. If User is present (redirecting) -> SHOW SPINNER
+  // 3. IMPORTANT: If AppContext is DONE loading AND User is NULL -> SHOW FORM (Do not block on hash)
+  const shouldShowLoading = isAuthLoading || user !== null;
 
-  if (isProcessingAuth) {
+  if (shouldShowLoading) {
     return (
         <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
              <div className="flex flex-col items-center gap-4">

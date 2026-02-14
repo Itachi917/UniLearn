@@ -67,66 +67,101 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
 
   // Check Active Session on Mount
   useEffect(() => {
+    let mounted = true;
+
     const checkUser = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session?.user) {
-        await loadUserData(session.user);
+      try {
+        const { data: { session }, error } = await supabase.auth.getSession();
+        if (error) throw error;
+        
+        if (session?.user && mounted) {
+          await loadUserData(session.user);
+        }
+      } catch (error) {
+        console.error("Error checking session:", error);
+      } finally {
+        if (mounted) setIsLoading(false);
       }
-      setIsLoading(false);
     };
+    
     checkUser();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
-        if (session?.user) {
+        if (session?.user && mounted) {
             await loadUserData(session.user);
-        } else {
-             // Don't clear immediately if we are switching to guest, handled by loginAsGuest
+            setIsLoading(false); // Ensure loading is cleared on auth change too
+        } else if (!_event.includes('INITIAL') && mounted) {
+             // Only clear user if explicit sign out or session loss, not during initial load
+             // But we do nothing here as we rely on explicit actions usually.
         }
     });
 
-    return () => subscription.unsubscribe();
+    // Safeguard: Force stop loading after 8 seconds if something gets stuck
+    const timeoutId = setTimeout(() => {
+        if (mounted && isLoading) {
+            console.warn("Forcing loading state to false due to timeout");
+            setIsLoading(false);
+        }
+    }, 8000);
+
+    return () => {
+        mounted = false;
+        subscription.unsubscribe();
+        clearTimeout(timeoutId);
+    };
   }, []);
 
   const loadUserData = async (authUser: any) => {
-    // 1. Get Profile
-    let profileData = { name: authUser.user_metadata?.name, avatarUrl: '' };
-    
-    const { data: profile } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', authUser.id)
-        .single();
-
-    if (profile) {
-        profileData = { name: profile.full_name, avatarUrl: profile.avatar_url };
-    } else {
-        // Create initial profile if missing
-        const newProfile = {
-            id: authUser.id,
-            email: authUser.email,
-            full_name: authUser.user_metadata?.name || '',
-            avatar_url: ''
-        };
-        await supabase.from('profiles').insert(newProfile);
-    }
-
-    setUser({
-        uid: authUser.id,
-        email: authUser.email || null,
-        isGuest: false,
-        name: profileData.name,
-        avatarUrl: profileData.avatarUrl
-    });
-
-    // 2. Get Progress
-    const { data: progressData } = await supabase
-        .from('user_progress')
-        .select('progress_data')
-        .eq('user_id', authUser.id)
-        .single();
+    try {
+        // 1. Get Profile
+        let profileData = { name: authUser.user_metadata?.name, avatarUrl: '' };
         
-    if (progressData && progressData.progress_data) {
-        setProgress(progressData.progress_data);
+        const { data: profile } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', authUser.id)
+            .single();
+
+        if (profile) {
+            profileData = { name: profile.full_name, avatarUrl: profile.avatar_url };
+        } else {
+            // Create initial profile if missing
+            const newProfile = {
+                id: authUser.id,
+                email: authUser.email,
+                full_name: authUser.user_metadata?.name || '',
+                avatar_url: ''
+            };
+            await supabase.from('profiles').insert(newProfile);
+        }
+
+        setUser({
+            uid: authUser.id,
+            email: authUser.email || null,
+            isGuest: false,
+            name: profileData.name,
+            avatarUrl: profileData.avatarUrl
+        });
+
+        // 2. Get Progress
+        const { data: progressData } = await supabase
+            .from('user_progress')
+            .select('progress_data')
+            .eq('user_id', authUser.id)
+            .single();
+            
+        if (progressData && progressData.progress_data) {
+            setProgress(progressData.progress_data);
+        }
+    } catch (err) {
+        console.error("Error loading user data:", err);
+        // Even if profile load fails, set basic user so they aren't stuck
+        setUser({
+            uid: authUser.id,
+            email: authUser.email || null,
+            isGuest: false,
+            name: authUser.user_metadata?.name || 'Student'
+        });
     }
   };
 
