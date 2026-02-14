@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import { useNavigate } from 'react-router-dom';
 import { GraduationCap, ArrowRight, Lock, Mail } from 'lucide-react';
@@ -11,6 +11,33 @@ const Landing: React.FC = () => {
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
+
+  // Check for errors in URL (e.g. from Google OAuth redirects)
+  useEffect(() => {
+    const handleUrlErrors = () => {
+        const params = new URLSearchParams(window.location.search);
+        const hashParams = new URLSearchParams(window.location.hash.replace('#', '?'));
+        
+        const errorDescription = params.get('error_description') || hashParams.get('error_description');
+        const errorCode = params.get('error_code') || hashParams.get('error_code');
+        
+        if (errorDescription) {
+            let userFriendlyMsg = errorDescription.replace(/\+/g, ' ');
+            
+            // Translate common Supabase database trigger errors for the user
+            if (userFriendlyMsg.includes("Database error saving new user")) {
+                userFriendlyMsg = "Login failed: Database setup issue. Please contact support or check database triggers.";
+            }
+            
+            setErrorMsg(userFriendlyMsg);
+            
+            // Clean URL
+            window.history.replaceState({}, document.title, window.location.pathname);
+        }
+    };
+    
+    handleUrlErrors();
+  }, []);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
