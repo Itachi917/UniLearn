@@ -37,6 +37,52 @@ const UserProfile: React.FC = () => {
     }
   };
 
+  // Helper to convert image to resized Base64 string
+  const processImageForDb = (file: File): Promise<string> => {
+      return new Promise((resolve) => {
+          const reader = new FileReader();
+          reader.readAsDataURL(file);
+          reader.onload = (e) => {
+              const img = new Image();
+              img.src = e.target?.result as string;
+              img.onload = () => {
+                  const canvas = document.createElement('canvas');
+                  // Resize to reasonable avatar size (e.g. 300x300 max) to save DB space
+                  const MAX_SIZE = 300;
+                  let width = img.width;
+                  let height = img.height;
+                  
+                  if (width > height) {
+                      if (width > MAX_SIZE) {
+                          height *= MAX_SIZE / width;
+                          width = MAX_SIZE;
+                      }
+                  } else {
+                      if (height > MAX_SIZE) {
+                          width *= MAX_SIZE / height;
+                          height = MAX_SIZE;
+                      }
+                  }
+                  
+                  canvas.width = width;
+                  canvas.height = height;
+                  const ctx = canvas.getContext('2d');
+                  if (ctx) {
+                      ctx.drawImage(img, 0, 0, width, height);
+                      // Return as JPEG base64 with 0.7 quality
+                      resolve(canvas.toDataURL('image/jpeg', 0.7));
+                  } else {
+                      // Fallback if canvas fails
+                      resolve(e.target?.result as string);
+                  }
+              };
+              img.onerror = () => {
+                   resolve(e.target?.result as string);
+              }
+          };
+      });
+  };
+
   const handleSave = async () => {
     setLoading(true);
     setMsg('');
@@ -46,18 +92,31 @@ const UserProfile: React.FC = () => {
         if (avatarFile) {
             const fileExt = avatarFile.name.split('.').pop();
             const fileName = `${user.uid}-${Date.now()}.${fileExt}`;
+            let uploadSuccessful = false;
 
-            const { error: uploadError } = await supabase.storage
-                .from('avatars')
-                .upload(fileName, avatarFile, { upsert: true });
+            // 1. Try Supabase Storage first
+            try {
+                const { error: uploadError } = await supabase.storage
+                    .from('avatars')
+                    .upload(fileName, avatarFile, { upsert: true });
 
-            if (uploadError) throw new Error('Upload failed. Create an "avatars" bucket in Supabase.');
+                if (!uploadError) {
+                    const { data } = supabase.storage
+                        .from('avatars')
+                        .getPublicUrl(fileName);
+                    finalAvatarUrl = data.publicUrl;
+                    uploadSuccessful = true;
+                } else {
+                    console.warn("Storage upload failed (likely missing bucket), falling back to Base64:", uploadError.message);
+                }
+            } catch (err) {
+                console.warn("Storage access error:", err);
+            }
 
-            const { data } = supabase.storage
-                .from('avatars')
-                .getPublicUrl(fileName);
-            
-            finalAvatarUrl = data.publicUrl;
+            // 2. Fallback to Base64 if storage failed
+            if (!uploadSuccessful) {
+                finalAvatarUrl = await processImageForDb(avatarFile);
+            }
         }
 
         await updateUserProfile(name, finalAvatarUrl);

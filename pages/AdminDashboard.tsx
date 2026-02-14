@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import Navbar from '../components/layout/Navbar';
 import { useApp } from '../context/AppContext';
 import { supabase } from '../lib/supabase';
-import { Save, Plus, Trash2, Edit, ArrowLeft, Layers, Book, BrainCircuit, Users, Database, FileJson, Check, X } from 'lucide-react';
+import { Save, Plus, Trash2, Edit, ArrowLeft, Layers, Book, BrainCircuit, Users, Database, FileJson, Check, X, AlertCircle } from 'lucide-react';
 import { Subject, Lecture, Flashcard, QuizQuestion } from '../types';
 
 type ViewMode = 'SUBJECT_LIST' | 'SUBJECT_EDIT' | 'LECTURE_EDIT' | 'STUDENT_LIST';
@@ -87,18 +87,25 @@ const AdminDashboard: React.FC = () => {
     setSaving(true);
     setMsg(null);
     try {
+      // 1. Check if table exists (implicit in upsert error handling, but good to know)
       const { error } = await supabase
         .from('app_content')
-        .upsert({ id: 'main', content: subjects });
+        .upsert({ id: 'main', content: subjects }, { onConflict: 'id' });
 
       if (error) throw error;
       
       await refreshSubjects();
-      setMsg({ type: 'success', text: 'Changes saved successfully!' });
-      setTimeout(() => setMsg(null), 3000);
+      setMsg({ type: 'success', text: 'Changes saved successfully to database!' });
+      
+      // Clear success message after 4 seconds
+      setTimeout(() => setMsg(null), 4000);
     } catch (err: any) {
       console.error(err);
-      setMsg({ type: 'error', text: 'Failed to save: ' + err.message });
+      let errorMessage = err.message;
+      if (err.message?.includes('relation "public.app_content" does not exist')) {
+          errorMessage = 'Database table missing. Please run the SQL setup script.';
+      }
+      setMsg({ type: 'error', text: 'Failed to save: ' + errorMessage });
     } finally {
       setSaving(false);
     }
@@ -190,8 +197,13 @@ const AdminDashboard: React.FC = () => {
             {subjects.map((sub, idx) => (
                 <div key={sub.id} className="bg-white dark:bg-gray-800 p-6 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm flex flex-col justify-between">
                     <div>
-                        <div className={`w-10 h-10 rounded-lg mb-4 flex items-center justify-center bg-${sub.color}-100 text-${sub.color}-600`}>
-                            <Book size={20} />
+                        <div className="flex justify-between items-start mb-4">
+                            <div className={`w-10 h-10 rounded-lg flex items-center justify-center bg-${sub.color}-100 text-${sub.color}-600`}>
+                                <Book size={20} />
+                            </div>
+                            <span className="px-2 py-1 text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded">
+                                {sub.level.replace('-', ' ')}
+                            </span>
                         </div>
                         <h3 className="font-bold text-lg text-gray-900 dark:text-white">{sub.title}</h3>
                         <p className="text-sm text-gray-500 dark:text-gray-400 mb-2">{sub.titleAr}</p>
@@ -239,6 +251,19 @@ const AdminDashboard: React.FC = () => {
                     <div>
                         <label className="block text-xs text-gray-500 mb-1">Title (AR)</label>
                         <input value={subject.titleAr} onChange={(e) => { const n = [...subjects]; n[activeSubjectIdx].titleAr = e.target.value; setSubjects(n); }} className="w-full p-2 border rounded-lg bg-transparent dark:border-gray-600 text-right" />
+                    </div>
+                    <div>
+                        <label className="block text-xs text-gray-500 mb-1">Academic Level</label>
+                        <select 
+                            value={subject.level} 
+                            onChange={(e) => { const n = [...subjects]; n[activeSubjectIdx].level = e.target.value; setSubjects(n); }}
+                            className="w-full p-2 border rounded-lg bg-transparent dark:border-gray-600 dark:bg-gray-800"
+                        >
+                            <option value="Level-1">Level 1</option>
+                            <option value="Level-2">Level 2</option>
+                            <option value="Level-3">Level 3</option>
+                            <option value="Level-4">Level 4</option>
+                        </select>
                     </div>
                     <div>
                         <label className="block text-xs text-gray-500 mb-1">Color Theme</label>
@@ -301,7 +326,7 @@ const AdminDashboard: React.FC = () => {
             newSubs[activeSubjectIdx].lectures[activeLectureIdx] = parsed;
             setSubjects(newSubs);
             setEditMode('VISUAL');
-            setMsg({ type: 'success', text: 'JSON applied successfully' });
+            setMsg({ type: 'success', text: 'JSON applied to local state. Remember to SAVE to database.' });
             setTimeout(() => setMsg(null), 3000);
         } catch (e: any) {
             setMsg({ type: 'error', text: 'Invalid JSON: ' + e.message });
@@ -386,8 +411,9 @@ const AdminDashboard: React.FC = () => {
 
             {editMode === 'JSON' ? (
                 <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
-                    <div className="bg-gray-50 dark:bg-gray-900/50 px-4 py-2 text-xs font-mono text-gray-500 border-b border-gray-200 dark:border-gray-700">
-                        Edit the lecture object directly. Changes will update the interface immediately but must be saved to database using "Save Content Changes" at the top.
+                    <div className="bg-gray-50 dark:bg-gray-900/50 px-4 py-2 text-xs font-mono text-gray-500 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
+                        <span>Edit the lecture object directly. Changes are local until you click "Save Content Changes" at the top right.</span>
+                        <span className="text-blue-600 font-bold">unsaved changes</span>
                     </div>
                     <textarea 
                         value={jsonText}
@@ -529,11 +555,27 @@ const AdminDashboard: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 pb-20">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 pb-20 relative">
       <Navbar />
       
+      {/* Fixed Toast Notification */}
+      {msg && (
+        <div className={`fixed bottom-6 right-6 z-50 px-6 py-4 rounded-xl shadow-2xl flex items-center gap-3 animate-fade-in-up border ${
+            msg.type === 'success' 
+            ? 'bg-green-600 text-white border-green-700' 
+            : 'bg-red-600 text-white border-red-700'
+        }`}>
+            {msg.type === 'success' ? <Check size={24} /> : <AlertCircle size={24} />}
+            <span className="font-medium">{msg.text}</span>
+            <button onClick={() => setMsg(null)} className="ml-2 opacity-70 hover:opacity-100">
+                <X size={16} />
+            </button>
+        </div>
+      )}
+
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="flex justify-between items-center mb-8 border-b border-gray-200 dark:border-gray-700 pb-6">
+        {/* Header - Made Sticky for better access */}
+        <div className="sticky top-16 z-40 bg-gray-50/95 dark:bg-gray-900/95 backdrop-blur-sm py-4 border-b border-gray-200 dark:border-gray-700 mb-8 flex justify-between items-center transition-all">
             <div>
                 <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Admin Dashboard</h1>
             </div>
@@ -543,19 +585,20 @@ const AdminDashboard: React.FC = () => {
                     onClick={saveToDatabase}
                     disabled={saving}
                     className={`flex items-center gap-2 px-6 py-2.5 rounded-lg font-medium text-white shadow-sm transition-all ${
-                        saving ? 'bg-blue-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'
+                        saving ? 'bg-blue-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700 shadow-blue-500/20 shadow-lg'
                     }`}
                 >
-                    {saving ? 'Saving...' : <><Save size={18} /> Save Content Changes</>}
+                    {saving ? (
+                        <>
+                            <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                            Saving...
+                        </>
+                    ) : (
+                        <><Save size={18} /> Save Content Changes</>
+                    )}
                 </button>
             )}
         </div>
-
-        {msg && (
-            <div className={`mb-6 p-4 rounded-lg flex items-center gap-2 ${msg.type === 'success' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                {msg.text}
-            </div>
-        )}
 
         <div className="flex flex-col md:flex-row gap-8">
             {renderSidebar()}
