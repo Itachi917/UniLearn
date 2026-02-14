@@ -56,7 +56,7 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
         return;
       }
 
-      if (data && data.content) {
+      if (data && data.content && Array.isArray(data.content)) {
         setSubjects(data.content);
       }
     } catch (err) {
@@ -64,7 +64,7 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
     }
   };
 
-  // Re-fetch subjects when user logs in to handle RLS policies that might block unauthenticated access
+  // Fetch subjects immediately on mount (for guests/everyone) AND when user changes
   useEffect(() => {
     refreshSubjects();
   }, [user?.uid]);
@@ -134,6 +134,9 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
         
         if (session?.user && mounted) {
           await loadUserData(session.user);
+        } else {
+          // If no session, we still want to ensure we have the latest subjects for guests/login screen
+          refreshSubjects();
         }
       } catch (error) {
         console.error("Error checking session:", error);
@@ -157,6 +160,9 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
             if (event === 'SIGNED_OUT') {
                 setUser(null);
                 setProgress({ completedLectures: [], quizScores: {} });
+                // Reset subjects to SEED initially, but then fetch fresh
+                setSubjects(SEED_DATA); 
+                refreshSubjects(); 
             }
             setIsLoading(false);
         }
@@ -263,6 +269,8 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
         quizScores: {},
         enrolledSubjectIds: SEED_DATA.map(s => s.id) 
     });
+    // Ensure we have fresh subjects even if we just logged in as guest
+    refreshSubjects();
     setIsLoading(false);
   };
 

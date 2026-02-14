@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Navbar from '../components/layout/Navbar';
 import { useApp } from '../context/AppContext';
 import { supabase } from '../lib/supabase';
-import { Save, Plus, Trash2, Edit, ArrowLeft, Layers, Book, BrainCircuit, Users, Database, FileJson, Check, X, AlertCircle, Sparkles, Wand2, MessageSquarePlus } from 'lucide-react';
+import { Save, Plus, Trash2, Edit, ArrowLeft, Layers, Book, BrainCircuit, Users, Database, FileJson, Check, X, AlertCircle, Sparkles, Wand2, MessageSquarePlus, UploadCloud, FileText } from 'lucide-react';
 import { Subject, Lecture, Flashcard, QuizQuestion } from '../types';
 import { GoogleGenAI, Type } from '@google/genai';
 
@@ -29,6 +29,9 @@ const AdminDashboard: React.FC = () => {
   const [saving, setSaving] = useState(false);
   const [generatingAI, setGeneratingAI] = useState(false);
   const [msg, setMsg] = useState<{type: 'success' | 'error' | 'info', text: string} | null>(null);
+
+  // File Upload State
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // JSON Edit State
   const [editMode, setEditMode] = useState<'VISUAL' | 'JSON'>('VISUAL');
@@ -88,29 +91,28 @@ const AdminDashboard: React.FC = () => {
     setSaving(true);
     setMsg(null);
     try {
-      // Create a timeout promise to prevent infinite hanging (e.g. 15 seconds)
+      // Increased timeout to 60 seconds to prevent premature timeouts on slow connections
       const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error("Request timed out. Please check your network.")), 15000)
+        setTimeout(() => reject(new Error("Request timed out. Please check your internet connection or try again.")), 60000)
       );
 
       const savePromise = supabase
         .from('app_content')
-        .upsert({ id: 'main', content: subjects }, { onConflict: 'id' });
+        .upsert({ id: 'main', content: subjects }, { onConflict: 'id' })
+        .select();
 
-      // Race against timeout
       const result: any = await Promise.race([savePromise, timeoutPromise]);
       const { error } = result;
 
       if (error) throw error;
       
-      // Try to refresh global state, but don't fail the whole operation if this part fails
       try {
         await refreshSubjects();
       } catch (refErr) {
         console.warn("Saved successfully, but failed to refresh local data immediately:", refErr);
       }
       
-      setMsg({ type: 'success', text: 'Changes saved successfully to database!' });
+      setMsg({ type: 'success', text: 'Changes saved successfully to database! All users will see updates shortly.' });
       setTimeout(() => setMsg(null), 4000);
     } catch (err: any) {
       console.error("Save error:", err);
@@ -120,64 +122,106 @@ const AdminDashboard: React.FC = () => {
     }
   };
 
-  const handleAIContentGen = async () => {
+  const generateContentWithAI = async (promptContext: string, imagePart?: any) => {
     const currentLecture = subjects[activeSubjectIdx].lectures[activeLectureIdx];
-    if (!currentLecture.title) {
+    if (!currentLecture.title && !promptContext) {
         setMsg({ type: 'error', text: 'Please provide a lecture title first.' });
         return;
     }
 
     setGeneratingAI(true);
-    setMsg({ type: 'info', text: 'AI is generating content for "' + currentLecture.title + '"...' });
-    
+    setMsg({ type: 'info', text: 'AI is analyzing and generating content...' });
+
     try {
         const ai = new GoogleGenAI({ apiKey: (process as any).env.API_KEY });
-        const response = await ai.models.generateContent({
-            model: 'gemini-3-flash-preview',
-            contents: `Generate a comprehensive university-level lecture content for the topic: "${currentLecture.title}". 
+        
+        // If image provided, use gemini-2.5-flash-image, else use gemini-3-flash-preview
+        const isImageModel = !!imagePart;
+        const modelName = isImageModel ? 'gemini-2.5-flash-image' : 'gemini-3-flash-preview';
+        
+        let systemPrompt = `Generate a comprehensive university-level lecture content.
             The subject is "${subjects[activeSubjectIdx].title}".
+            Lecture Context: ${promptContext || currentLecture.title}
+            
             Provide:
             1. A detailed summary in Markdown format (use headers, bold text, and bullet points).
-            2. A list of 5 key topics (short phrases).
+            2. A list of 5 key topics.
             3. 5 flashcards (question and answer).
-            4. 5 quiz questions (question, 4 options, and correct index 0-3).`,
-            config: {
-                responseMimeType: "application/json",
-                responseSchema: {
-                    type: Type.OBJECT,
-                    properties: {
-                        summary: { type: Type.STRING },
-                        topics: { type: Type.ARRAY, items: { type: Type.STRING } },
-                        flashcards: {
-                            type: Type.ARRAY,
-                            items: {
-                                type: Type.OBJECT,
-                                properties: {
-                                    question: { type: Type.STRING },
-                                    answer: { type: Type.STRING }
-                                },
-                                required: ['question', 'answer']
-                            }
-                        },
-                        quiz: {
-                            type: Type.ARRAY,
-                            items: {
-                                type: Type.OBJECT,
-                                properties: {
-                                    question: { type: Type.STRING },
-                                    options: { type: Type.ARRAY, items: { type: Type.STRING } },
-                                    correctIndex: { type: Type.INTEGER }
-                                },
-                                required: ['question', 'options', 'correctIndex']
-                            }
+            4. 5 multiple-choice quiz questions. Provide 4 options and correctIndex.`;
+
+        if (isImageModel) {
+            systemPrompt += `\n\nReturn the output strictly as a valid JSON object. Do not wrap in markdown code blocks. The JSON structure should match:
+            {
+                "summary": "string",
+                "topics": ["string"],
+                "flashcards": [{"question": "string", "answer": "string"}],
+                "quiz": [{"question": "string", "options": ["string"], "correctIndex": number}]
+            }`;
+        }
+
+        let contents: any;
+        if (imagePart) {
+             contents = {
+                parts: [
+                    imagePart,
+                    { text: systemPrompt }
+                ]
+            };
+        } else {
+             contents = systemPrompt;
+        }
+
+        const config: any = {};
+        if (!isImageModel) {
+            config.responseMimeType = "application/json";
+            config.responseSchema = {
+                type: Type.OBJECT,
+                properties: {
+                    summary: { type: Type.STRING },
+                    topics: { type: Type.ARRAY, items: { type: Type.STRING } },
+                    flashcards: {
+                        type: Type.ARRAY,
+                        items: {
+                            type: Type.OBJECT,
+                            properties: {
+                                question: { type: Type.STRING },
+                                answer: { type: Type.STRING }
+                            },
+                            required: ['question', 'answer']
                         }
                     },
-                    required: ['summary', 'topics', 'flashcards', 'quiz']
-                }
-            }
+                    quiz: {
+                        type: Type.ARRAY,
+                        items: {
+                            type: Type.OBJECT,
+                            properties: {
+                                question: { type: Type.STRING },
+                                options: { type: Type.ARRAY, items: { type: Type.STRING } },
+                                correctIndex: { type: Type.INTEGER }
+                            },
+                            required: ['question', 'options', 'correctIndex']
+                        }
+                    }
+                },
+                required: ['summary', 'topics', 'flashcards', 'quiz']
+            };
+        }
+
+        const response = await ai.models.generateContent({
+            model: modelName,
+            contents: contents,
+            config: config
         });
 
-        const data = JSON.parse(response.text);
+        let text = response.text || "{}";
+        // Clean up markdown if present (often happens with image models even if asked not to)
+        if (text.includes('```json')) {
+            text = text.replace(/```json/g, '').replace(/```/g, '');
+        } else if (text.includes('```')) {
+            text = text.replace(/```/g, '');
+        }
+
+        const data = JSON.parse(text);
         
         const newSubs = [...subjects];
         const updatedLecture = {
@@ -185,7 +229,10 @@ const AdminDashboard: React.FC = () => {
             summary: data.summary,
             topics: data.topics,
             flashcards: data.flashcards,
-            quiz: data.quiz.map((q: any, i: number) => ({ ...q, id: Date.now() + i }))
+            quiz: data.quiz.map((q: any, i: number) => ({ 
+                ...q, 
+                id: Date.now() + i
+            }))
         };
         newSubs[activeSubjectIdx].lectures[activeLectureIdx] = updatedLecture;
         
@@ -199,80 +246,35 @@ const AdminDashboard: React.FC = () => {
     }
   };
 
-  const handleAIContentGenFromTopic = async () => {
+  const handleAIContentGen = () => generateContentWithAI("");
+
+  const handleAIContentGenFromTopic = () => {
     const topic = window.prompt("Enter a specific topic or focus for this lecture content:");
-    if (!topic) return;
+    if (topic) generateContentWithAI(topic);
+  };
 
-    setGeneratingAI(true);
-    setMsg({ type: 'info', text: 'AI is generating content for "' + topic.substring(0, 20) + (topic.length > 20 ? '...' : '') + '"' });
-    
-    try {
-        const ai = new GoogleGenAI({ apiKey: (process as any).env.API_KEY });
-        const response = await ai.models.generateContent({
-            model: 'gemini-3-flash-preview',
-            contents: `Generate a comprehensive university-level lecture content based on this specific topic/description: "${topic}". 
-            The subject context is "${subjects[activeSubjectIdx].title}".
-            Provide:
-            1. A detailed summary in Markdown format (use headers, bold text, and bullet points).
-            2. A list of 5 key topics (short phrases).
-            3. 5 flashcards (question and answer).
-            4. 5 quiz questions (question, 4 options, and correct index 0-3).`,
-            config: {
-                responseMimeType: "application/json",
-                responseSchema: {
-                    type: Type.OBJECT,
-                    properties: {
-                        summary: { type: Type.STRING },
-                        topics: { type: Type.ARRAY, items: { type: Type.STRING } },
-                        flashcards: {
-                            type: Type.ARRAY,
-                            items: {
-                                type: Type.OBJECT,
-                                properties: {
-                                    question: { type: Type.STRING },
-                                    answer: { type: Type.STRING }
-                                },
-                                required: ['question', 'answer']
-                            }
-                        },
-                        quiz: {
-                            type: Type.ARRAY,
-                            items: {
-                                type: Type.OBJECT,
-                                properties: {
-                                    question: { type: Type.STRING },
-                                    options: { type: Type.ARRAY, items: { type: Type.STRING } },
-                                    correctIndex: { type: Type.INTEGER }
-                                },
-                                required: ['question', 'options', 'correctIndex']
-                            }
-                        }
-                    },
-                    required: ['summary', 'topics', 'flashcards', 'quiz']
-                }
-            }
-        });
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
 
-        const data = JSON.parse(response.text);
-        
-        const newSubs = [...subjects];
-        const updatedLecture = {
-            ...newSubs[activeSubjectIdx].lectures[activeLectureIdx],
-            summary: data.summary,
-            topics: data.topics,
-            flashcards: data.flashcards,
-            quiz: data.quiz.map((q: any, i: number) => ({ ...q, id: Date.now() + i }))
-        };
-        newSubs[activeSubjectIdx].lectures[activeLectureIdx] = updatedLecture;
-        
-        setSubjects(newSubs);
-        setMsg({ type: 'success', text: 'AI generated content successfully!' });
-    } catch (err: any) {
-        console.error("AI Generation Error:", err);
-        setMsg({ type: 'error', text: 'AI Generation failed: ' + err.message });
-    } finally {
-        setGeneratingAI(false);
-    }
+      const reader = new FileReader();
+      reader.onload = async (event) => {
+          const base64Data = (event.target?.result as string).split(',')[1];
+          const mimeType = file.type;
+          
+          // Construct image part
+          const imagePart = {
+              inlineData: {
+                  data: base64Data,
+                  mimeType: mimeType
+              }
+          };
+          
+          await generateContentWithAI("Generate content based on this uploaded file.", imagePart);
+      };
+      reader.readAsDataURL(file);
+      // Reset input
+      e.target.value = '';
   };
 
   // --- HANDLERS ---
@@ -547,6 +549,13 @@ const AdminDashboard: React.FC = () => {
                 <div className="flex gap-2">
                     {editMode === 'VISUAL' && (
                         <>
+                        <input 
+                            type="file" 
+                            ref={fileInputRef} 
+                            onChange={handleFileChange} 
+                            accept="image/*,application/pdf,text/*"
+                            className="hidden"
+                        />
                          <button 
                             onClick={handleAIContentGen}
                             disabled={generatingAI}
@@ -562,6 +571,14 @@ const AdminDashboard: React.FC = () => {
                         >
                             {generatingAI ? <Sparkles size={16} className="animate-spin" /> : <MessageSquarePlus size={16} />}
                             AI from Topic
+                        </button>
+                        <button 
+                            onClick={() => fileInputRef.current?.click()}
+                            disabled={generatingAI}
+                            className="flex items-center gap-2 px-4 py-1.5 bg-gradient-to-r from-orange-500 to-red-500 text-white rounded-lg hover:from-orange-600 hover:to-red-600 transition-all shadow-md hover:shadow-lg disabled:opacity-50"
+                        >
+                            {generatingAI ? <Sparkles size={16} className="animate-spin" /> : <UploadCloud size={16} />}
+                            AI from File
                         </button>
                         </>
                     )}
@@ -662,13 +679,14 @@ const AdminDashboard: React.FC = () => {
                         </div>
                         <div className="space-y-4">
                             {lecture.quiz?.map((q, qIdx) => (
-                                <div key={q.id || qIdx} className="p-4 bg-gray-50 dark:bg-gray-900/50 rounded-lg border border-gray-100 dark:border-gray-700 group">
+                                <div key={q.id || qIdx} className="p-4 bg-gray-50 dark:bg-gray-900/50 rounded-lg border border-gray-100 dark:border-gray-700 group relative">
                                     <div className="flex gap-2 mb-3">
                                         <input value={q.question} onChange={(e) => updateQuizQ(qIdx, 'question', e.target.value)} placeholder="Question" className="flex-1 p-2 text-sm border rounded bg-white dark:bg-gray-800 dark:border-gray-600 font-medium" />
                                         <button onClick={() => deleteQuizQ(qIdx)} className="text-red-400 hover:text-red-600 p-1"><Trash2 size={16} /></button>
                                     </div>
+                                    
                                     <div className="grid grid-cols-2 gap-2 mb-3">
-                                        {q.options.map((opt, oIdx) => (
+                                        {q.options?.map((opt, oIdx) => (
                                             <div key={oIdx} className="relative">
                                                 <input 
                                                     value={opt} 

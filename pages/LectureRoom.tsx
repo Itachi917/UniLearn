@@ -134,45 +134,70 @@ const LectureRoom: React.FC = () => {
             )}
 
             {activeTab === 'flashcards' && (
-                <div className="max-w-2xl mx-auto">
+                <div className="max-w-4xl mx-auto">
                     {deck && deck.length > 0 ? (
-                        <div className="flex flex-col gap-6">
-                            {/* Card Container */}
-                            <Flashcard 
-                                key={`${lecture.id}-${currentCardIdx}-${deck[currentCardIdx].question}`} // Unique key forces reset of flip state
-                                data={deck[currentCardIdx]} 
-                            />
+                        <div className="flex flex-col gap-8">
                             
-                            {/* Controls */}
-                            <div className="flex items-center justify-between bg-white dark:bg-gray-800 p-4 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm">
+                            <div className="flex items-center justify-center gap-4 sm:gap-8">
+                                {/* Desktop Previous Arrow */}
                                 <button 
                                     onClick={prevCard}
                                     disabled={currentCardIdx === 0}
-                                    className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                                    className="hidden sm:flex p-4 rounded-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-lg text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 disabled:opacity-30 disabled:cursor-not-allowed transition-all hover:scale-110 active:scale-95"
                                     title={t('previous')}
+                                >
+                                    <ChevronLeft size={32} className="rtl:rotate-180" />
+                                </button>
+                                
+                                {/* Card Container */}
+                                <div className="flex-1 w-full max-w-xl mx-auto">
+                                    <Flashcard 
+                                        key={`${lecture.id}-${currentCardIdx}-${deck[currentCardIdx].question}`} // Unique key forces reset of flip state
+                                        data={deck[currentCardIdx]} 
+                                    />
+                                </div>
+
+                                {/* Desktop Next Arrow */}
+                                <button 
+                                    onClick={nextCard}
+                                    disabled={currentCardIdx === deck.length - 1}
+                                    className="hidden sm:flex p-4 rounded-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-lg text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 disabled:opacity-30 disabled:cursor-not-allowed transition-all hover:scale-110 active:scale-95"
+                                    title={t('next')}
+                                >
+                                    <ChevronRight size={32} className="rtl:rotate-180" />
+                                </button>
+                            </div>
+                            
+                            {/* Controls Bar (Mobile Nav + Shuffle) */}
+                            <div className="flex items-center justify-between bg-white dark:bg-gray-800 p-4 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm max-w-xl mx-auto w-full">
+                                {/* Mobile Previous */}
+                                <button 
+                                    onClick={prevCard}
+                                    disabled={currentCardIdx === 0}
+                                    className="sm:hidden p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
                                 >
                                     <ChevronLeft size={24} className="rtl:rotate-180" />
                                 </button>
                                 
-                                <div className="flex items-center gap-4">
+                                <div className="flex items-center gap-4 mx-auto sm:mx-0">
                                     <span className="font-mono font-medium text-gray-600 dark:text-gray-300">
                                         {currentCardIdx + 1} / {deck.length}
                                     </span>
                                     <div className="h-4 w-px bg-gray-300 dark:bg-gray-600"></div>
                                     <button 
                                         onClick={shuffleDeck}
-                                        className="flex items-center gap-2 text-sm font-medium text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 px-3 py-1.5 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
+                                        className="flex items-center gap-2 text-sm font-bold text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 px-3 py-1.5 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
                                     >
-                                        <Shuffle size={16} />
+                                        <Shuffle size={18} />
                                         Shuffle
                                     </button>
                                 </div>
 
+                                {/* Mobile Next */}
                                 <button 
                                     onClick={nextCard}
                                     disabled={currentCardIdx === deck.length - 1}
-                                    className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                                    title={t('next')}
+                                    className="sm:hidden p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
                                 >
                                     <ChevronRight size={24} className="rtl:rotate-180" />
                                 </button>

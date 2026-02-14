@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import { useNavigate } from 'react-router-dom';
-import { GraduationCap, ArrowRight, Lock, Mail, User, CheckCircle } from 'lucide-react';
+import { GraduationCap, ArrowRight, Lock, Mail, User, CheckCircle, Languages } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
 const Landing: React.FC = () => {
-  const { loginAsGuest, t, language, user, isLoading: isAuthLoading } = useApp();
+  const { loginAsGuest, t, language, setLanguage, user, isLoading: isAuthLoading } = useApp();
   const navigate = useNavigate();
   
   // Auth State
@@ -67,7 +67,7 @@ const Landing: React.FC = () => {
         if (data.session) {
              // Session active immediately
         } else if (data.user) {
-             setSuccessMsg("Account created successfully! You can now log in.");
+             setSuccessMsg(t('accountCreated'));
              setIsSignUp(false);
         }
       } else {
@@ -79,7 +79,7 @@ const Landing: React.FC = () => {
         if (error) throw error;
       }
     } catch (error: any) {
-      setErrorMsg(error.message || "Authentication failed");
+      setErrorMsg(error.message || t('authFailed'));
     } finally {
       setIsLocalLoading(false);
     }
@@ -113,12 +113,12 @@ const Landing: React.FC = () => {
         <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
              <div className="flex flex-col items-center gap-4 p-8 text-center">
                 <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" />
-                <p className="text-gray-500 dark:text-gray-400 animate-pulse">Checking your session...</p>
+                <p className="text-gray-500 dark:text-gray-400 animate-pulse">{t('checkingSession')}</p>
                 <button 
                   onClick={() => window.location.reload()}
                   className="mt-8 text-sm text-blue-600 hover:underline opacity-50 hover:opacity-100 transition-opacity"
                 >
-                  Taking too long? Click here to refresh
+                  {t('takingTooLong')}
                 </button>
              </div>
         </div>
@@ -126,7 +126,16 @@ const Landing: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 px-4 py-8">
+    <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 px-4 py-8 relative">
+      {/* Language Switcher */}
+      <button
+        onClick={() => setLanguage(language === 'en' ? 'ar' : 'en')}
+        className="absolute top-4 right-4 z-50 p-2 bg-white dark:bg-gray-800 rounded-full shadow-md text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+        title="Switch Language"
+      >
+        <Languages size={20} />
+      </button>
+
       <div className="max-w-4xl w-full grid md:grid-cols-2 gap-8 bg-white dark:bg-gray-800 rounded-2xl shadow-xl overflow-hidden border border-gray-100 dark:border-gray-700">
         
         {/* Left Side: Branding */}
@@ -141,16 +150,14 @@ const Landing: React.FC = () => {
             <div className="w-12 h-12 bg-white/20 backdrop-blur-sm rounded-xl flex items-center justify-center mb-6">
                 <GraduationCap size={32} />
             </div>
-            <h1 className="text-4xl font-bold mb-4">UniLearn Pro</h1>
+            <h1 className="text-4xl font-bold mb-4">{t('landingTitle')}</h1>
             <p className="text-blue-100 text-lg leading-relaxed">
-              {language === 'ar' 
-               ? "منصة تعليمية متطورة للطلاب الجامعيين. تعلم، تدرب، وتفوق."
-               : "Advanced e-learning platform for university students. Learn, practice, and excel."}
+              {t('landingSubtitle')}
             </p>
           </div>
           
           <div className="mt-12 text-sm text-blue-200 z-10 hidden md:block">
-            © 2024 UniLearn. {language === 'ar' ? "جميع الحقوق محفوظة" : "All rights reserved."}
+            © 2024 UniLearn. {t('rightsReserved')}
           </div>
         </div>
 
@@ -159,7 +166,7 @@ const Landing: React.FC = () => {
           
           <div className="flex items-center justify-between mb-8">
             <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
-              {isSignUp ? "Create Account" : t('login')}
+              {isSignUp ? t('createAccount') : t('login')}
             </h2>
           </div>
 
@@ -172,13 +179,13 @@ const Landing: React.FC = () => {
                 onClick={() => { setIsSignUp(false); setErrorMsg(''); setSuccessMsg(''); }}
                 className={`flex-1 py-2 text-sm font-medium z-10 transition-colors duration-300 ${!isSignUp ? 'text-gray-900 dark:text-white' : 'text-gray-500 dark:text-gray-400'}`}
              >
-                Log In
+                {t('login')}
              </button>
              <button 
                 onClick={() => { setIsSignUp(true); setErrorMsg(''); setSuccessMsg(''); }}
                 className={`flex-1 py-2 text-sm font-medium z-10 transition-colors duration-300 ${isSignUp ? 'text-gray-900 dark:text-white' : 'text-gray-500 dark:text-gray-400'}`}
              >
-                Sign Up
+                {t('signUp')}
              </button>
           </div>
 
@@ -199,7 +206,7 @@ const Landing: React.FC = () => {
 
             {isSignUp && (
                 <div className="animate-fade-in-up">
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Full Name</label>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('fullName')}</label>
                     <div className="relative">
                         <User className="absolute left-3 top-3 text-gray-400" size={18} />
                         <input 
@@ -254,7 +261,7 @@ const Landing: React.FC = () => {
                   <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
               ) : (
                   <>
-                    <span>{isSignUp ? "Sign Up" : t('login')}</span>
+                    <span>{isSignUp ? t('signUp') : t('login')}</span>
                     <ArrowRight size={18} />
                   </>
               )}
@@ -285,13 +292,13 @@ const Landing: React.FC = () => {
                         d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
                     />
                 </svg>
-                {isSignUp ? "Sign up with Google" : "Sign in with Google"}
+                {isSignUp ? t('googleSignUp') : t('googleSignIn')}
              </button>
           </div>
 
           <div className="my-6 flex items-center">
             <div className="flex-grow border-t border-gray-200 dark:border-gray-700"></div>
-            <span className="px-4 text-sm text-gray-400">or</span>
+            <span className="px-4 text-sm text-gray-400">{t('or')}</span>
             <div className="flex-grow border-t border-gray-200 dark:border-gray-700"></div>
           </div>
 
