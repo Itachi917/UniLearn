@@ -45,23 +45,38 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
 
   const refreshSubjects = async () => {
     try {
+      console.log("Fetching subjects from DB...");
       const { data, error } = await supabase
         .from('app_content')
         .select('content')
         .eq('id', 'main')
-        .single();
+        .maybeSingle();
       
-      if (data && data.content) {
+      if (error) {
+        console.error("Error fetching subjects from Supabase:", error);
+        return;
+      }
+
+      if (data && data.content && Array.isArray(data.content)) {
+        console.log("Subjects loaded from DB successfully.");
         setSubjects(data.content);
+      } else {
+        console.warn("No content found in DB, using SEED_DATA.");
+        // We do NOT set SEED_DATA here to avoid overwriting existing state if fetch fails temporarily
+        // unless subjects is empty? No, keep current state.
       }
     } catch (err) {
-      console.error("Error fetching subjects:", err);
+      console.error("Error executing fetch subjects:", err);
     }
   };
 
+  // Re-fetch subjects when user logs in to handle RLS policies that might block unauthenticated access
+  // Also runs on mount implicitly via the auth listener logic below
   useEffect(() => {
-    refreshSubjects();
-  }, []);
+    if (user) {
+        refreshSubjects();
+    }
+  }, [user]);
 
   const loadUserData = async (authUser: any) => {
     try {
@@ -121,6 +136,9 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
   useEffect(() => {
     let mounted = true;
 
+    // Initial Fetch
+    refreshSubjects();
+
     const checkUser = async () => {
       try {
         const { data: { session }, error } = await supabase.auth.getSession();
@@ -151,6 +169,9 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
             if (event === 'SIGNED_OUT') {
                 setUser(null);
                 setProgress({ completedLectures: [], quizScores: {} });
+                // Reset to seed data on logout to be safe
+                setSubjects(SEED_DATA);
+                refreshSubjects(); // Try to fetch public content if available
             }
             setIsLoading(false);
         }
