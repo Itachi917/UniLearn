@@ -5,14 +5,21 @@ import { GraduationCap, ArrowRight, Lock, Mail } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
 const Landing: React.FC = () => {
-  const { loginAsGuest, t, language } = useApp();
+  const { loginAsGuest, t, language, user, isLoading: isAuthLoading } = useApp();
   const navigate = useNavigate();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
 
-  // Check for errors in URL (e.g. from Google OAuth redirects)
+  // 1. Handle Automatic Redirect if Logged In
+  useEffect(() => {
+    if (!isAuthLoading && user) {
+        navigate('/levels', { replace: true });
+    }
+  }, [user, isAuthLoading, navigate]);
+
+  // 2. Check for errors in URL (e.g. from Google OAuth redirects)
   useEffect(() => {
     const handleUrlErrors = () => {
         const params = new URLSearchParams(window.location.search);
@@ -53,11 +60,9 @@ const Landing: React.FC = () => {
       if (error) {
         throw error;
       }
-      // Auth state listener in AppContext will handle the redirect/state update
-      navigate('/levels');
+      // Auth state listener in AppContext will handle the redirect/state update via the useEffect above
     } catch (error: any) {
       setErrorMsg(error.message || "Failed to login");
-    } finally {
       setIsLoading(false);
     }
   };
@@ -81,6 +86,21 @@ const Landing: React.FC = () => {
     loginAsGuest();
     navigate('/levels');
   };
+
+  // Prevent flash of login form during auth check or redirect processing
+  // checking hash includes access_token handles the split second before supabase processes the OAuth redirect
+  const isProcessingAuth = isAuthLoading || (user !== null) || window.location.hash.includes('access_token');
+
+  if (isProcessingAuth) {
+    return (
+        <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
+             <div className="flex flex-col items-center gap-4">
+                <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" />
+                <p className="text-gray-500 dark:text-gray-400 animate-pulse">Loading UniLearn...</p>
+             </div>
+        </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 px-4">
