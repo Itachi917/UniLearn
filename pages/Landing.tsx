@@ -1,16 +1,22 @@
 import React, { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import { useNavigate } from 'react-router-dom';
-import { GraduationCap, ArrowRight, Lock, Mail } from 'lucide-react';
+import { GraduationCap, ArrowRight, Lock, Mail, User, CheckCircle } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
 const Landing: React.FC = () => {
   const { loginAsGuest, t, language, user, isLoading: isAuthLoading } = useApp();
   const navigate = useNavigate();
+  
+  // Auth State
+  const [isSignUp, setIsSignUp] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [name, setName] = useState('');
+  
   const [isLocalLoading, setIsLocalLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
+  const [successMsg, setSuccessMsg] = useState('');
 
   // Automatic Redirect if Logged In
   useEffect(() => {
@@ -38,20 +44,43 @@ const Landing: React.FC = () => {
     handleUrlErrors();
   }, []);
 
-  const handleLogin = async (e: React.FormEvent) => {
+  const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLocalLoading(true);
     setErrorMsg('');
+    setSuccessMsg('');
 
     try {
-      const { error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
-      if (error) throw error;
-      // AppContext handles state change and redirect
+      if (isSignUp) {
+        // Sign Up Logic
+        const { data, error } = await supabase.auth.signUp({
+          email,
+          password,
+          options: {
+            data: {
+              name: name,
+            },
+          },
+        });
+        if (error) throw error;
+        
+        if (data.session) {
+             // Session active immediately
+        } else if (data.user) {
+             setSuccessMsg("Account created successfully! You can now log in.");
+             setIsSignUp(false);
+        }
+      } else {
+        // Login Logic
+        const { error } = await supabase.auth.signInWithPassword({
+          email,
+          password,
+        });
+        if (error) throw error;
+      }
     } catch (error: any) {
-      setErrorMsg(error.message || "Failed to login");
+      setErrorMsg(error.message || "Authentication failed");
+    } finally {
       setIsLocalLoading(false);
     }
   };
@@ -85,8 +114,6 @@ const Landing: React.FC = () => {
              <div className="flex flex-col items-center gap-4 p-8 text-center">
                 <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" />
                 <p className="text-gray-500 dark:text-gray-400 animate-pulse">Checking your session...</p>
-                
-                {/* Emergency escape button if stuck for too long */}
                 <button 
                   onClick={() => window.location.reload()}
                   className="mt-8 text-sm text-blue-600 hover:underline opacity-50 hover:opacity-100 transition-opacity"
@@ -99,11 +126,11 @@ const Landing: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 px-4">
+    <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 px-4 py-8">
       <div className="max-w-4xl w-full grid md:grid-cols-2 gap-8 bg-white dark:bg-gray-800 rounded-2xl shadow-xl overflow-hidden border border-gray-100 dark:border-gray-700">
         
         {/* Left Side: Branding */}
-        <div className="p-8 md:p-12 bg-blue-600 text-white flex flex-col justify-between relative overflow-hidden">
+        <div className="p-8 md:p-12 bg-blue-600 text-white flex flex-col justify-between relative overflow-hidden min-h-[300px] md:min-h-full">
           <div className="absolute top-0 left-0 w-full h-full opacity-10 pointer-events-none">
              <svg className="w-full h-full" viewBox="0 0 100 100" preserveAspectRatio="none">
                  <path d="M0 100 C 20 0 50 0 100 100 Z" fill="white" />
@@ -122,23 +149,71 @@ const Landing: React.FC = () => {
             </p>
           </div>
           
-          <div className="mt-12 text-sm text-blue-200 z-10">
+          <div className="mt-12 text-sm text-blue-200 z-10 hidden md:block">
             © 2024 UniLearn. {language === 'ar' ? "جميع الحقوق محفوظة" : "All rights reserved."}
           </div>
         </div>
 
-        {/* Right Side: Login Form */}
+        {/* Right Side: Auth Form */}
         <div className="p-8 md:p-12 flex flex-col justify-center">
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-6">
-            {t('login')}
-          </h2>
+          
+          <div className="flex items-center justify-between mb-8">
+            <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
+              {isSignUp ? "Create Account" : t('login')}
+            </h2>
+          </div>
 
-          <form onSubmit={handleLogin} className="space-y-5">
+          {/* Toggle Switch */}
+          <div className="flex bg-gray-100 dark:bg-gray-700 p-1 rounded-xl mb-6 relative">
+             <div 
+               className={`absolute top-1 bottom-1 w-[calc(50%-4px)] bg-white dark:bg-gray-600 rounded-lg shadow-sm transition-all duration-300 ease-in-out ${isSignUp ? 'left-[calc(50%)]' : 'left-1'}`}
+             ></div>
+             <button 
+                onClick={() => { setIsSignUp(false); setErrorMsg(''); setSuccessMsg(''); }}
+                className={`flex-1 py-2 text-sm font-medium z-10 transition-colors duration-300 ${!isSignUp ? 'text-gray-900 dark:text-white' : 'text-gray-500 dark:text-gray-400'}`}
+             >
+                Log In
+             </button>
+             <button 
+                onClick={() => { setIsSignUp(true); setErrorMsg(''); setSuccessMsg(''); }}
+                className={`flex-1 py-2 text-sm font-medium z-10 transition-colors duration-300 ${isSignUp ? 'text-gray-900 dark:text-white' : 'text-gray-500 dark:text-gray-400'}`}
+             >
+                Sign Up
+             </button>
+          </div>
+
+          <form onSubmit={handleAuth} className="space-y-4">
             {errorMsg && (
-                <div className="p-3 bg-red-100 border border-red-200 text-red-700 rounded-lg text-sm">
-                    {errorMsg}
+                <div className="p-3 bg-red-100 border border-red-200 text-red-700 rounded-lg text-sm flex items-start gap-2 animate-pulse">
+                    <span className="mt-0.5">⚠️</span>
+                    <span>{errorMsg}</span>
                 </div>
             )}
+            
+            {successMsg && (
+                <div className="p-3 bg-green-100 border border-green-200 text-green-700 rounded-lg text-sm flex items-start gap-2">
+                    <CheckCircle size={16} className="mt-0.5" />
+                    <span>{successMsg}</span>
+                </div>
+            )}
+
+            {isSignUp && (
+                <div className="animate-fade-in-up">
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Full Name</label>
+                    <div className="relative">
+                        <User className="absolute left-3 top-3 text-gray-400" size={18} />
+                        <input 
+                        type="text" 
+                        value={name}
+                        onChange={(e) => setName(e.target.value)}
+                        className="w-full pl-10 pr-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                        placeholder="John Doe"
+                        required={isSignUp}
+                        />
+                    </div>
+                </div>
+            )}
+
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('email')}</label>
               <div className="relative">
@@ -165,6 +240,7 @@ const Landing: React.FC = () => {
                   className="w-full pl-10 pr-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition-all"
                   placeholder="••••••••"
                   required
+                  minLength={6}
                 />
               </div>
             </div>
@@ -172,13 +248,13 @@ const Landing: React.FC = () => {
             <button 
               type="submit" 
               disabled={isLocalLoading}
-              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-lg transition-all transform active:scale-95 flex items-center justify-center gap-2"
+              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-lg transition-all transform active:scale-[0.98] flex items-center justify-center gap-2"
             >
               {isLocalLoading ? (
                   <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
               ) : (
                   <>
-                    <span>{t('login')}</span>
+                    <span>{isSignUp ? "Sign Up" : t('login')}</span>
                     <ArrowRight size={18} />
                   </>
               )}
@@ -209,7 +285,7 @@ const Landing: React.FC = () => {
                         d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
                     />
                 </svg>
-                Sign in with Google
+                {isSignUp ? "Sign up with Google" : "Sign in with Google"}
              </button>
           </div>
 
@@ -223,7 +299,7 @@ const Landing: React.FC = () => {
             onClick={handleGuest}
             className="w-full bg-gray-100 dark:bg-gray-800 border-2 border-transparent hover:border-blue-500 text-gray-700 dark:text-gray-300 font-medium py-2.5 rounded-lg transition-all"
           >
-            {t('continueGuest')}
+            {t('continueGuest')} (Preview Content)
           </button>
           
           <p className="text-xs text-center text-gray-400 mt-4">
