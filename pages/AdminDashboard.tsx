@@ -434,7 +434,16 @@ const AdminDashboard: React.FC = () => {
                              <label className="block text-xs font-medium text-gray-500 mb-1">Topics (comma separated)</label>
                              <input value={lecture.topics?.join(', ')} onChange={(e) => updateLecture('topics', e.target.value.split(',').map(s => s.trim()))} className="w-full p-2 border rounded-lg bg-transparent dark:border-gray-600" />
                         </div>
-                        <textarea value={lecture.summary} onChange={(e) => updateLecture('summary', e.target.value)} placeholder="Summary (Markdown)" className="w-full h-32 p-2 border rounded-lg bg-transparent dark:border-gray-600" />
+                        <div>
+                            <label className="block text-xs font-medium text-gray-500 mb-1">Summary (Markdown Supported)</label>
+                            <textarea 
+                                value={lecture.summary} 
+                                onChange={(e) => updateLecture('summary', e.target.value)} 
+                                placeholder="# Header&#10;- Bullet point&#10;**Bold text**" 
+                                className="w-full h-48 p-3 border rounded-lg bg-transparent dark:border-gray-600 font-mono text-sm" 
+                            />
+                            <p className="text-xs text-gray-400 mt-1">Use Markdown for formatting: # for headers, - for lists, ** for bold.</p>
+                        </div>
                     </div>
 
                     {/* Flashcards */}
