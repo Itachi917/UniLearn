@@ -10,7 +10,8 @@ import AdminDashboard from './pages/AdminDashboard';
 import UserProfile from './pages/UserProfile';
 
 // Protected Route Component
-const ProtectedRoute = ({ children }: { children: ReactNode }) => {
+// Fix: Make children optional to resolve "children missing" errors during JSX instantiation in element props
+const ProtectedRoute = ({ children }: { children?: ReactNode }) => {
   const { user, isLoading } = useApp();
   
   if (isLoading) return <div className="min-h-screen flex items-center justify-center">Loading...</div>;

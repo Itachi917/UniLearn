@@ -2,8 +2,9 @@ import React, { useState, useEffect } from 'react';
 import Navbar from '../components/layout/Navbar';
 import { useApp } from '../context/AppContext';
 import { supabase } from '../lib/supabase';
-import { Save, Plus, Trash2, Edit, ArrowLeft, Layers, Book, BrainCircuit, Users, Database, FileJson, Check, X, AlertCircle } from 'lucide-react';
+import { Save, Plus, Trash2, Edit, ArrowLeft, Layers, Book, BrainCircuit, Users, Database, FileJson, Check, X, AlertCircle, Sparkles, Wand2 } from 'lucide-react';
 import { Subject, Lecture, Flashcard, QuizQuestion } from '../types';
+import { GoogleGenAI, Type } from '@google/genai';
 
 type ViewMode = 'SUBJECT_LIST' | 'SUBJECT_EDIT' | 'LECTURE_EDIT' | 'STUDENT_LIST';
 
@@ -26,7 +27,8 @@ const AdminDashboard: React.FC = () => {
   const [activeSubjectIdx, setActiveSubjectIdx] = useState<number>(-1);
   const [activeLectureIdx, setActiveLectureIdx] = useState<number>(-1);
   const [saving, setSaving] = useState(false);
-  const [msg, setMsg] = useState<{type: 'success' | 'error', text: string} | null>(null);
+  const [generatingAI, setGeneratingAI] = useState(false);
+  const [msg, setMsg] = useState<{type: 'success' | 'error' | 'info', text: string} | null>(null);
 
   // JSON Edit State
   const [editMode, setEditMode] = useState<'VISUAL' | 'JSON'>('VISUAL');
@@ -42,7 +44,6 @@ const AdminDashboard: React.FC = () => {
     }
   }, [contextSubjects]);
 
-  // Fetch Students Logic
   const fetchStudents = async () => {
       setLoadingStudents(true);
       try {
@@ -56,7 +57,7 @@ const AdminDashboard: React.FC = () => {
               const prog = progress.find((pr: any) => pr.user_id === p.id)?.progress_data || {};
               const completedCount = prog.completedLectures?.length || 0;
               const quizScores = prog.quizScores || {};
-              const totalPoints = Object.values(quizScores).reduce((a: any, b: any) => a + b, 0) as number;
+              const totalPoints = Object.values(quizScores).reduce((a: any, b: any) => (a as number) + (b as number), 0) as number;
 
               return {
                   id: p.id,
@@ -87,7 +88,6 @@ const AdminDashboard: React.FC = () => {
     setSaving(true);
     setMsg(null);
     try {
-      // 1. Check if table exists (implicit in upsert error handling, but good to know)
       const { error } = await supabase
         .from('app_content')
         .upsert({ id: 'main', content: subjects }, { onConflict: 'id' });
@@ -96,18 +96,91 @@ const AdminDashboard: React.FC = () => {
       
       await refreshSubjects();
       setMsg({ type: 'success', text: 'Changes saved successfully to database!' });
-      
-      // Clear success message after 4 seconds
       setTimeout(() => setMsg(null), 4000);
     } catch (err: any) {
       console.error(err);
-      let errorMessage = err.message;
-      if (err.message?.includes('relation "public.app_content" does not exist')) {
-          errorMessage = 'Database table missing. Please run the SQL setup script.';
-      }
-      setMsg({ type: 'error', text: 'Failed to save: ' + errorMessage });
+      setMsg({ type: 'error', text: 'Failed to save: ' + err.message });
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleAIContentGen = async () => {
+    const currentLecture = subjects[activeSubjectIdx].lectures[activeLectureIdx];
+    if (!currentLecture.title) {
+        setMsg({ type: 'error', text: 'Please provide a lecture title first.' });
+        return;
+    }
+
+    setGeneratingAI(true);
+    setMsg({ type: 'info', text: 'AI is generating content for "' + currentLecture.title + '"...' });
+    
+    try {
+        const ai = new GoogleGenAI({ apiKey: (process as any).env.API_KEY });
+        const response = await ai.models.generateContent({
+            model: 'gemini-3-flash-preview',
+            contents: `Generate a comprehensive university-level lecture content for the topic: "${currentLecture.title}". 
+            The subject is "${subjects[activeSubjectIdx].title}".
+            Provide:
+            1. A detailed summary in Markdown format (use headers, bold text, and bullet points).
+            2. A list of 5 key topics (short phrases).
+            3. 5 flashcards (question and answer).
+            4. 5 quiz questions (question, 4 options, and correct index 0-3).`,
+            config: {
+                responseMimeType: "application/json",
+                responseSchema: {
+                    type: Type.OBJECT,
+                    properties: {
+                        summary: { type: Type.STRING },
+                        topics: { type: Type.ARRAY, items: { type: Type.STRING } },
+                        flashcards: {
+                            type: Type.ARRAY,
+                            items: {
+                                type: Type.OBJECT,
+                                properties: {
+                                    question: { type: Type.STRING },
+                                    answer: { type: Type.STRING }
+                                },
+                                required: ['question', 'answer']
+                            }
+                        },
+                        quiz: {
+                            type: Type.ARRAY,
+                            items: {
+                                type: Type.OBJECT,
+                                properties: {
+                                    question: { type: Type.STRING },
+                                    options: { type: Type.ARRAY, items: { type: Type.STRING } },
+                                    correctIndex: { type: Type.INTEGER }
+                                },
+                                required: ['question', 'options', 'correctIndex']
+                            }
+                        }
+                    },
+                    required: ['summary', 'topics', 'flashcards', 'quiz']
+                }
+            }
+        });
+
+        const data = JSON.parse(response.text);
+        
+        const newSubs = [...subjects];
+        const updatedLecture = {
+            ...newSubs[activeSubjectIdx].lectures[activeLectureIdx],
+            summary: data.summary,
+            topics: data.topics,
+            flashcards: data.flashcards,
+            quiz: data.quiz.map((q: any, i: number) => ({ ...q, id: Date.now() + i }))
+        };
+        newSubs[activeSubjectIdx].lectures[activeLectureIdx] = updatedLecture;
+        
+        setSubjects(newSubs);
+        setMsg({ type: 'success', text: 'AI generated content successfully!' });
+    } catch (err: any) {
+        console.error("AI Generation Error:", err);
+        setMsg({ type: 'error', text: 'AI Generation failed: ' + err.message });
+    } finally {
+        setGeneratingAI(false);
     }
   };
 
@@ -138,7 +211,7 @@ const AdminDashboard: React.FC = () => {
         id: `lec-${Date.now()}`,
         title: 'New Lecture',
         titleAr: 'محاضرة جديدة',
-        summary: 'Enter summary here...',
+        summary: '',
         flashcards: [],
         quiz: [],
         topics: []
@@ -320,13 +393,11 @@ const AdminDashboard: React.FC = () => {
     const handleApplyJson = () => {
         try {
             const parsed = JSON.parse(jsonText);
-            if (!parsed.id || !parsed.title) throw new Error("JSON must include at least an id and title");
-            
             const newSubs = [...subjects];
             newSubs[activeSubjectIdx].lectures[activeLectureIdx] = parsed;
             setSubjects(newSubs);
             setEditMode('VISUAL');
-            setMsg({ type: 'success', text: 'JSON applied to local state. Remember to SAVE to database.' });
+            setMsg({ type: 'success', text: 'JSON applied locally.' });
             setTimeout(() => setMsg(null), 3000);
         } catch (e: any) {
             setMsg({ type: 'error', text: 'Invalid JSON: ' + e.message });
@@ -383,6 +454,16 @@ const AdminDashboard: React.FC = () => {
                 </div>
 
                 <div className="flex gap-2">
+                    {editMode === 'VISUAL' && (
+                         <button 
+                            onClick={handleAIContentGen}
+                            disabled={generatingAI}
+                            className="flex items-center gap-2 px-4 py-1.5 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-lg hover:from-purple-700 hover:to-blue-700 transition-all shadow-md hover:shadow-lg disabled:opacity-50"
+                        >
+                            {generatingAI ? <Sparkles size={16} className="animate-spin" /> : <Wand2 size={16} />}
+                            AI Magic
+                        </button>
+                    )}
                     {editMode === 'VISUAL' ? (
                         <button 
                             onClick={handleEnterJsonMode}
@@ -411,10 +492,6 @@ const AdminDashboard: React.FC = () => {
 
             {editMode === 'JSON' ? (
                 <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
-                    <div className="bg-gray-50 dark:bg-gray-900/50 px-4 py-2 text-xs font-mono text-gray-500 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
-                        <span>Edit the lecture object directly. Changes are local until you click "Save Content Changes" at the top right.</span>
-                        <span className="text-blue-600 font-bold">unsaved changes</span>
-                    </div>
                     <textarea 
                         value={jsonText}
                         onChange={(e) => setJsonText(e.target.value)}
@@ -427,8 +504,14 @@ const AdminDashboard: React.FC = () => {
                     {/* Basic Info */}
                     <div className="bg-white dark:bg-gray-800 p-6 rounded-xl border border-gray-200 dark:border-gray-700 space-y-4">
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <input value={lecture.title} onChange={(e) => updateLecture('title', e.target.value)} placeholder="Title (EN)" className="w-full p-2 border rounded-lg bg-transparent dark:border-gray-600" />
-                            <input value={lecture.titleAr} onChange={(e) => updateLecture('titleAr', e.target.value)} placeholder="Title (AR)" className="w-full p-2 border rounded-lg bg-transparent dark:border-gray-600 text-right" />
+                            <div>
+                                <label className="block text-xs font-medium text-gray-500 mb-1">Title (EN)</label>
+                                <input value={lecture.title} onChange={(e) => updateLecture('title', e.target.value)} placeholder="e.g. Intro to Memory Management" className="w-full p-2 border rounded-lg bg-transparent dark:border-gray-600" />
+                            </div>
+                            <div>
+                                <label className="block text-xs font-medium text-gray-500 mb-1">Title (AR)</label>
+                                <input value={lecture.titleAr} onChange={(e) => updateLecture('titleAr', e.target.value)} placeholder="العنوان بالعربية" className="w-full p-2 border rounded-lg bg-transparent dark:border-gray-600 text-right" />
+                            </div>
                         </div>
                         <div>
                              <label className="block text-xs font-medium text-gray-500 mb-1">Topics (comma separated)</label>
@@ -439,27 +522,32 @@ const AdminDashboard: React.FC = () => {
                             <textarea 
                                 value={lecture.summary} 
                                 onChange={(e) => updateLecture('summary', e.target.value)} 
-                                placeholder="# Header&#10;- Bullet point&#10;**Bold text**" 
-                                className="w-full h-48 p-3 border rounded-lg bg-transparent dark:border-gray-600 font-mono text-sm" 
+                                placeholder="# Main Point&#10;- Sub point&#10;**Bold text**" 
+                                className="w-full h-72 p-4 border rounded-lg bg-transparent dark:border-gray-600 font-mono text-sm leading-relaxed" 
                             />
-                            <p className="text-xs text-gray-400 mt-1">Use Markdown for formatting: # for headers, - for lists, ** for bold.</p>
+                            <div className="flex gap-4 mt-2 text-[10px] text-gray-400 font-mono uppercase tracking-widest">
+                                <span># Header</span>
+                                <span>- List</span>
+                                <span>**Bold**</span>
+                                <span>*Italic*</span>
+                            </div>
                         </div>
                     </div>
 
                     {/* Flashcards */}
                     <div className="bg-white dark:bg-gray-800 p-6 rounded-xl border border-gray-200 dark:border-gray-700">
                         <div className="flex justify-between items-center mb-4">
-                            <h3 className="font-semibold flex items-center gap-2"><Layers size={18}/> Flashcards</h3>
-                            <button onClick={addFlashcard} className="text-xs bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded hover:bg-gray-200">+ Add</button>
+                            <h3 className="font-semibold flex items-center gap-2 text-gray-900 dark:text-white"><Layers size={18}/> Flashcards</h3>
+                            <button onClick={addFlashcard} className="text-xs bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 px-3 py-1 rounded hover:bg-blue-100 transition-colors">+ Add Manual</button>
                         </div>
-                        <div className="space-y-3">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             {lecture.flashcards?.map((card, idx) => (
-                                <div key={idx} className="flex gap-2 items-start p-3 bg-gray-50 dark:bg-gray-900/50 rounded-lg border border-gray-100 dark:border-gray-700">
+                                <div key={idx} className="flex gap-2 items-start p-4 bg-gray-50 dark:bg-gray-900/50 rounded-lg border border-gray-100 dark:border-gray-700 group">
                                     <div className="flex-1 space-y-2">
-                                        <input value={card.question} onChange={(e) => updateFlashcard(idx, 'question', e.target.value)} placeholder="Q" className="w-full p-1.5 text-sm border rounded bg-white dark:bg-gray-800 dark:border-gray-600" />
-                                        <input value={card.answer} onChange={(e) => updateFlashcard(idx, 'answer', e.target.value)} placeholder="A" className="w-full p-1.5 text-sm border rounded bg-white dark:bg-gray-800 dark:border-gray-600" />
+                                        <textarea value={card.question} onChange={(e) => updateFlashcard(idx, 'question', e.target.value)} placeholder="Question" className="w-full p-1.5 text-sm border rounded bg-white dark:bg-gray-800 dark:border-gray-600 resize-none h-16" />
+                                        <textarea value={card.answer} onChange={(e) => updateFlashcard(idx, 'answer', e.target.value)} placeholder="Answer" className="w-full p-1.5 text-sm border rounded bg-white dark:bg-gray-800 dark:border-gray-600 resize-none h-16" />
                                     </div>
-                                    <button onClick={() => deleteFlashcard(idx)} className="text-red-400 hover:text-red-600"><Trash2 size={16} /></button>
+                                    <button onClick={() => deleteFlashcard(idx)} className="text-red-400 hover:text-red-600 p-1 opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 size={16} /></button>
                                 </div>
                             ))}
                         </div>
@@ -468,24 +556,31 @@ const AdminDashboard: React.FC = () => {
                     {/* Quiz */}
                     <div className="bg-white dark:bg-gray-800 p-6 rounded-xl border border-gray-200 dark:border-gray-700">
                         <div className="flex justify-between items-center mb-4">
-                            <h3 className="font-semibold flex items-center gap-2"><BrainCircuit size={18}/> Quiz</h3>
-                            <button onClick={addQuizQ} className="text-xs bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded hover:bg-gray-200">+ Add</button>
+                            <h3 className="font-semibold flex items-center gap-2 text-gray-900 dark:text-white"><BrainCircuit size={18}/> Quiz Questions</h3>
+                            <button onClick={addQuizQ} className="text-xs bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 px-3 py-1 rounded hover:bg-blue-100 transition-colors">+ Add Manual</button>
                         </div>
                         <div className="space-y-4">
                             {lecture.quiz?.map((q, qIdx) => (
-                                <div key={q.id} className="p-4 bg-gray-50 dark:bg-gray-900/50 rounded-lg border border-gray-100 dark:border-gray-700">
-                                    <div className="flex gap-2 mb-2">
+                                <div key={q.id || qIdx} className="p-4 bg-gray-50 dark:bg-gray-900/50 rounded-lg border border-gray-100 dark:border-gray-700 group">
+                                    <div className="flex gap-2 mb-3">
                                         <input value={q.question} onChange={(e) => updateQuizQ(qIdx, 'question', e.target.value)} placeholder="Question" className="flex-1 p-2 text-sm border rounded bg-white dark:bg-gray-800 dark:border-gray-600 font-medium" />
-                                        <button onClick={() => deleteQuizQ(qIdx)} className="text-red-400 hover:text-red-600"><Trash2 size={16} /></button>
+                                        <button onClick={() => deleteQuizQ(qIdx)} className="text-red-400 hover:text-red-600 p-1"><Trash2 size={16} /></button>
                                     </div>
-                                    <div className="grid grid-cols-2 gap-2 mb-2">
+                                    <div className="grid grid-cols-2 gap-2 mb-3">
                                         {q.options.map((opt, oIdx) => (
-                                            <input key={oIdx} value={opt} onChange={(e) => updateQuizQ(qIdx, 'option', e.target.value, oIdx)} placeholder={`Opt ${oIdx+1}`} className={`w-full p-1.5 text-sm border rounded bg-white dark:bg-gray-800 ${q.correctIndex === oIdx ? 'border-green-500 ring-1 ring-green-500' : 'dark:border-gray-600'}`} />
+                                            <div key={oIdx} className="relative">
+                                                <input 
+                                                    value={opt} 
+                                                    onChange={(e) => updateQuizQ(qIdx, 'option', e.target.value, oIdx)} 
+                                                    placeholder={`Option ${oIdx+1}`} 
+                                                    className={`w-full p-2 pl-8 text-sm border rounded bg-white dark:bg-gray-800 ${q.correctIndex === oIdx ? 'border-green-500 ring-1 ring-green-500' : 'dark:border-gray-600'}`} 
+                                                />
+                                                <button 
+                                                    onClick={() => updateQuizQ(qIdx, 'correctIndex', oIdx)}
+                                                    className={`absolute left-2 top-2.5 w-4 h-4 rounded-full border ${q.correctIndex === oIdx ? 'bg-green-500 border-green-600' : 'bg-gray-100 dark:bg-gray-700 border-gray-300 dark:border-gray-500'}`}
+                                                />
+                                            </div>
                                         ))}
-                                    </div>
-                                    <div className="flex items-center gap-2 text-sm">
-                                        <span>Correct Index:</span>
-                                        <input type="number" min="0" max="3" value={q.correctIndex} onChange={(e) => updateQuizQ(qIdx, 'correctIndex', parseInt(e.target.value))} className="w-16 p-1 border rounded bg-white dark:bg-gray-800 dark:border-gray-600" />
                                     </div>
                                 </div>
                             ))}
@@ -572,9 +667,11 @@ const AdminDashboard: React.FC = () => {
         <div className={`fixed bottom-6 right-6 z-50 px-6 py-4 rounded-xl shadow-2xl flex items-center gap-3 animate-fade-in-up border ${
             msg.type === 'success' 
             ? 'bg-green-600 text-white border-green-700' 
+            : msg.type === 'info'
+            ? 'bg-blue-600 text-white border-blue-700'
             : 'bg-red-600 text-white border-red-700'
         }`}>
-            {msg.type === 'success' ? <Check size={24} /> : <AlertCircle size={24} />}
+            {msg.type === 'success' ? <Check size={24} /> : msg.type === 'info' ? <Sparkles size={24} className="animate-pulse" /> : <AlertCircle size={24} />}
             <span className="font-medium">{msg.text}</span>
             <button onClick={() => setMsg(null)} className="ml-2 opacity-70 hover:opacity-100">
                 <X size={16} />
@@ -583,7 +680,6 @@ const AdminDashboard: React.FC = () => {
       )}
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Header - Made Sticky for better access */}
         <div className="sticky top-16 z-40 bg-gray-50/95 dark:bg-gray-900/95 backdrop-blur-sm py-4 border-b border-gray-200 dark:border-gray-700 mb-8 flex justify-between items-center transition-all">
             <div>
                 <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Admin Dashboard</h1>

@@ -26,7 +26,8 @@ interface AppContextType {
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
-export const AppProvider = ({ children }: { children: ReactNode }) => {
+// Fix: Make children optional to resolve "children missing" errors in App.tsx usage
+export const AppProvider = ({ children }: { children?: ReactNode }) => {
   // State
   const [user, setUser] = useState<User | null>(null);
   const [language, setLanguage] = useState<Language>('en');
@@ -34,7 +35,7 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
   const [progress, setProgress] = useState<UserProgress>({
     completedLectures: [],
     quizScores: {},
-    enrolledSubjectIds: undefined // Undefined initially allows checking for "first time"
+    enrolledSubjectIds: undefined 
   });
   const [subjects, setSubjects] = useState<Subject[]>(SEED_DATA);
   const [isLoading, setIsLoading] = useState(true);
@@ -42,7 +43,6 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
   // Computed
   const isAdmin = user?.email === 'asm977661@gmail.com';
 
-  // Fetch Content (Subjects) from Supabase
   const refreshSubjects = async () => {
     try {
       const { data, error } = await supabase
@@ -53,8 +53,6 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
       
       if (data && data.content) {
         setSubjects(data.content);
-      } else {
-        console.log("No remote content found, using seed data.");
       }
     } catch (err) {
       console.error("Error fetching subjects:", err);
@@ -65,7 +63,61 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     refreshSubjects();
   }, []);
 
-  // Check Active Session on Mount
+  const loadUserData = async (authUser: any) => {
+    try {
+        let profileData = { name: authUser.user_metadata?.name || 'Student', avatarUrl: '' };
+        
+        // Attempt to fetch profile but don't hang if it fails
+        const { data: profile, error: pError } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', authUser.id)
+            .maybeSingle();
+
+        if (profile) {
+            // Fix: Change avatar_url to avatarUrl to match the local variable structure defined on line 66
+            profileData = { name: profile.full_name, avatarUrl: profile.avatar_url };
+        } else if (!pError) {
+            // Create profile if it doesn't exist
+            const newProfile = {
+                id: authUser.id,
+                email: authUser.email,
+                full_name: authUser.user_metadata?.name || '',
+                avatar_url: ''
+            };
+            await supabase.from('profiles').insert(newProfile);
+        }
+
+        setUser({
+            uid: authUser.id,
+            email: authUser.email || null,
+            isGuest: false,
+            name: profileData.name,
+            avatarUrl: profileData.avatarUrl
+        });
+
+        // Get Progress
+        const { data: progressData } = await supabase
+            .from('user_progress')
+            .select('progress_data')
+            .eq('user_id', authUser.id)
+            .maybeSingle();
+            
+        if (progressData && progressData.progress_data) {
+            setProgress(progressData.progress_data);
+        }
+    } catch (err) {
+        console.error("Error in loadUserData:", err);
+        // Fallback to basic user data so app isn't bricked
+        setUser({
+            uid: authUser.id,
+            email: authUser.email || null,
+            isGuest: false,
+            name: authUser.user_metadata?.name || 'Student'
+        });
+    }
+  };
+
   useEffect(() => {
     let mounted = true;
 
@@ -86,20 +138,28 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     
     checkUser();
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
-        if (session?.user && mounted) {
-            await loadUserData(session.user);
-            setIsLoading(false); // Ensure loading is cleared on auth change too
-        } else if (!_event.includes('INITIAL') && mounted) {
-             // Only clear user if explicit sign out or session loss, not during initial load
-             // But we do nothing here as we rely on explicit actions usually.
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+        if (!mounted) return;
+
+        if (session?.user) {
+            if (user?.uid !== session.user.id) {
+                await loadUserData(session.user);
+            }
+            setIsLoading(false);
+        } else {
+            // If no session exists (or logout occurred), ensure loading is stopped
+            if (event === 'SIGNED_OUT') {
+                setUser(null);
+                setProgress({ completedLectures: [], quizScores: {} });
+            }
+            setIsLoading(false);
         }
     });
 
-    // Safeguard: Force stop loading after 8 seconds if something gets stuck
+    // Safeguard timeout: If anything takes more than 8 seconds, clear the loading state
     const timeoutId = setTimeout(() => {
         if (mounted && isLoading) {
-            console.warn("Forcing loading state to false due to timeout");
+            console.warn("Auth check timed out, clearing loading state manually");
             setIsLoading(false);
         }
     }, 8000);
@@ -111,63 +171,8 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     };
   }, []);
 
-  const loadUserData = async (authUser: any) => {
-    try {
-        // 1. Get Profile
-        let profileData = { name: authUser.user_metadata?.name, avatarUrl: '' };
-        
-        const { data: profile } = await supabase
-            .from('profiles')
-            .select('*')
-            .eq('id', authUser.id)
-            .single();
-
-        if (profile) {
-            profileData = { name: profile.full_name, avatarUrl: profile.avatar_url };
-        } else {
-            // Create initial profile if missing
-            const newProfile = {
-                id: authUser.id,
-                email: authUser.email,
-                full_name: authUser.user_metadata?.name || '',
-                avatar_url: ''
-            };
-            await supabase.from('profiles').insert(newProfile);
-        }
-
-        setUser({
-            uid: authUser.id,
-            email: authUser.email || null,
-            isGuest: false,
-            name: profileData.name,
-            avatarUrl: profileData.avatarUrl
-        });
-
-        // 2. Get Progress
-        const { data: progressData } = await supabase
-            .from('user_progress')
-            .select('progress_data')
-            .eq('user_id', authUser.id)
-            .single();
-            
-        if (progressData && progressData.progress_data) {
-            setProgress(progressData.progress_data);
-        }
-    } catch (err) {
-        console.error("Error loading user data:", err);
-        // Even if profile load fails, set basic user so they aren't stuck
-        setUser({
-            uid: authUser.id,
-            email: authUser.email || null,
-            isGuest: false,
-            name: authUser.user_metadata?.name || 'Student'
-        });
-    }
-  };
-
   const updateUserProfile = async (name: string, avatarUrl: string) => {
     if (!user || user.isGuest) return;
-
     try {
         const updates = {
             id: user.uid,
@@ -175,11 +180,8 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
             avatar_url: avatarUrl,
             updated_at: new Date().toISOString(),
         };
-
         const { error } = await supabase.from('profiles').upsert(updates);
         if (error) throw error;
-
-        // Functional update ensures we use the most recent state and avoid staleness
         setUser(prevUser => prevUser ? { ...prevUser, name, avatarUrl } : null);
     } catch (error) {
         console.error("Error updating profile:", error);
@@ -187,7 +189,6 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
-  // Theme Effect
   useEffect(() => {
     if (theme === 'dark') {
       document.documentElement.classList.add('dark');
@@ -196,7 +197,6 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     }
   }, [theme]);
 
-  // Language Effect (RTL)
   useEffect(() => {
     if (language === 'ar') {
       document.body.classList.add('rtl');
@@ -207,7 +207,6 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
     }
   }, [language]);
 
-  // Persist Progress
   const saveProgress = async (newProgress: UserProgress) => {
     setProgress(newProgress);
     if (user && !user.isGuest) {
@@ -253,20 +252,25 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
 
   const loginAsGuest = () => {
     setUser({ uid: 'guest', email: null, isGuest: true, name: 'Guest Student' });
-    // Guests see all subjects by default or none? Let's give them all for exploration
     setProgress({ 
         completedLectures: [], 
         quizScores: {},
         enrolledSubjectIds: SEED_DATA.map(s => s.id) 
     });
+    setIsLoading(false);
   };
 
   const logout = async () => {
-    if (!user?.isGuest) {
-        await supabase.auth.signOut();
+    setIsLoading(true);
+    try {
+        if (!user?.isGuest) {
+            await supabase.auth.signOut();
+        }
+    } finally {
+        setUser(null);
+        setProgress({ completedLectures: [], quizScores: {} });
+        setIsLoading(false);
     }
-    setUser(null);
-    setProgress({ completedLectures: [], quizScores: {} });
   };
 
   const toggleTheme = () => {

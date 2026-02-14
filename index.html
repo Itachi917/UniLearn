@@ -16,7 +16,39 @@
               accent: '#8b5cf6',
               surface: '#f3f4f6',
               'surface-dark': '#1f2937',
-            }
+            },
+            typography: (theme) => ({
+              DEFAULT: {
+                css: {
+                  color: theme('colors.gray.900'),
+                  a: {
+                    color: theme('colors.blue.600'),
+                    '&:hover': {
+                      color: theme('colors.blue.700'),
+                    },
+                  },
+                  h1: { fontWeight: '700' },
+                  h2: { fontWeight: '700' },
+                  h3: { fontWeight: '600' },
+                  ul: { listStyleType: 'disc' },
+                  ol: { listStyleType: 'decimal' },
+                },
+              },
+              invert: {
+                css: {
+                  color: theme('colors.gray.100'),
+                  a: {
+                    color: theme('colors.blue.400'),
+                    '&:hover': {
+                      color: theme('colors.blue.300'),
+                    },
+                  },
+                  h1: { color: theme('colors.white') },
+                  h2: { color: theme('colors.white') },
+                  h3: { color: theme('colors.white') },
+                },
+              },
+            }),
           }
         }
       }
@@ -32,6 +64,25 @@
         direction: rtl;
         font-family: 'Cairo', sans-serif;
       }
+
+      /* Custom Scrollbar */
+      ::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
+      }
+      ::-webkit-scrollbar-track {
+        background: transparent;
+      }
+      ::-webkit-scrollbar-thumb {
+        background: #cbd5e1;
+        border-radius: 10px;
+      }
+      .dark ::-webkit-scrollbar-thumb {
+        background: #475569;
+      }
+      ::-webkit-scrollbar-thumb:hover {
+        background: #94a3b8;
+      }
     </style>
   <script type="importmap">
 {
@@ -44,7 +95,8 @@
     "react-dom/": "https://esm.sh/react-dom@^19.2.4/",
     "@vitejs/plugin-react": "https://esm.sh/@vitejs/plugin-react@^5.1.4",
     "lucide-react": "https://esm.sh/lucide-react@^0.564.0",
-    "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@^2.95.3"
+    "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@^2.95.3",
+    "@google/genai": "https://esm.sh/@google/genai"
   }
 }
 </script>

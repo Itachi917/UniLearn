@@ -25,8 +25,9 @@ const UserProfile: React.FC = () => {
   const overallProgress = totalLectures > 0 ? Math.round((completedCount / totalLectures) * 100) : 0;
   
   const quizIds = Object.keys(progress.quizScores);
+  // Fix: Cast Object.values to number[] to resolve "Operator '+' cannot be applied to types 'unknown' and 'unknown'" error.
   const avgQuizScore = quizIds.length > 0 
-    ? Math.round(Object.values(progress.quizScores).reduce((a, b) => a + b, 0) / quizIds.length) 
+    ? Math.round((Object.values(progress.quizScores) as number[]).reduce((a: number, b: number) => a + b, 0) / quizIds.length) 
     : 0;
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {

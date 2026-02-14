@@ -9,46 +9,38 @@ const Landing: React.FC = () => {
   const navigate = useNavigate();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLocalLoading, setIsLocalLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
 
-  // 1. Handle Automatic Redirect if Logged In
+  // Automatic Redirect if Logged In
   useEffect(() => {
     if (!isAuthLoading && user) {
         navigate('/levels', { replace: true });
     }
   }, [user, isAuthLoading, navigate]);
 
-  // 2. Check for errors in URL (e.g. from Google OAuth redirects)
+  // Check for errors in URL 
   useEffect(() => {
     const handleUrlErrors = () => {
         const params = new URLSearchParams(window.location.search);
         const hashParams = new URLSearchParams(window.location.hash.replace('#', '?'));
         
         const errorDescription = params.get('error_description') || hashParams.get('error_description');
-        const errorCode = params.get('error_code') || hashParams.get('error_code');
-        
         if (errorDescription) {
             let userFriendlyMsg = errorDescription.replace(/\+/g, ' ');
-            
-            // Translate common Supabase database trigger errors for the user
             if (userFriendlyMsg.includes("Database error saving new user")) {
-                userFriendlyMsg = "Login failed: Database setup issue. Please contact support or check database triggers.";
+                userFriendlyMsg = "Login failed: Database trigger issue. Please contact support.";
             }
-            
             setErrorMsg(userFriendlyMsg);
-            
-            // Clean URL
             window.history.replaceState({}, document.title, window.location.pathname);
         }
     };
-    
     handleUrlErrors();
   }, []);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsLoading(true);
+    setIsLocalLoading(true);
     setErrorMsg('');
 
     try {
@@ -56,18 +48,16 @@ const Landing: React.FC = () => {
         email,
         password,
       });
-
-      if (error) {
-        throw error;
-      }
-      // Auth state listener in AppContext will handle the redirect/state update via the useEffect above
+      if (error) throw error;
+      // AppContext handles state change and redirect
     } catch (error: any) {
       setErrorMsg(error.message || "Failed to login");
-      setIsLoading(false);
+      setIsLocalLoading(false);
     }
   };
 
   const handleGoogleLogin = async () => {
+    setIsLocalLoading(true);
     try {
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
@@ -77,28 +67,32 @@ const Landing: React.FC = () => {
       });
       if (error) throw error;
     } catch (error: any) {
-      console.error("Google Login Error:", error);
-      setErrorMsg(error.message || "Failed to initiate Google Login. Please ensure Google provider is enabled in Supabase.");
+      setErrorMsg(error.message || "Google Login failed");
+      setIsLocalLoading(false);
     }
   };
 
   const handleGuest = () => {
     loginAsGuest();
-    navigate('/levels');
   };
 
-  // Logic to determine if we should show the loading spinner vs the form
-  // 1. If AppContext says loading -> SHOW SPINNER
-  // 2. If User is present (redirecting) -> SHOW SPINNER
-  // 3. IMPORTANT: If AppContext is DONE loading AND User is NULL -> SHOW FORM (Do not block on hash)
-  const shouldShowLoading = isAuthLoading || user !== null;
+  // Only show the blocking spinner if the app is checking for a session OR we are authenticated but waiting to redirect
+  const isActuallyLoading = isAuthLoading || (user !== null && !isAuthLoading);
 
-  if (shouldShowLoading) {
+  if (isActuallyLoading) {
     return (
         <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
-             <div className="flex flex-col items-center gap-4">
+             <div className="flex flex-col items-center gap-4 p-8 text-center">
                 <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" />
-                <p className="text-gray-500 dark:text-gray-400 animate-pulse">Loading UniLearn...</p>
+                <p className="text-gray-500 dark:text-gray-400 animate-pulse">Checking your session...</p>
+                
+                {/* Emergency escape button if stuck for too long */}
+                <button 
+                  onClick={() => window.location.reload()}
+                  className="mt-8 text-sm text-blue-600 hover:underline opacity-50 hover:opacity-100 transition-opacity"
+                >
+                  Taking too long? Click here to refresh
+                </button>
              </div>
         </div>
     );
@@ -155,6 +149,7 @@ const Landing: React.FC = () => {
                   onChange={(e) => setEmail(e.target.value)}
                   className="w-full pl-10 pr-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition-all"
                   placeholder="example@gmail.com"
+                  required
                 />
               </div>
             </div>
@@ -169,16 +164,17 @@ const Landing: React.FC = () => {
                   onChange={(e) => setPassword(e.target.value)}
                   className="w-full pl-10 pr-4 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition-all"
                   placeholder="••••••••"
+                  required
                 />
               </div>
             </div>
 
             <button 
               type="submit" 
-              disabled={isLoading}
+              disabled={isLocalLoading}
               className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-lg transition-all transform active:scale-95 flex items-center justify-center gap-2"
             >
-              {isLoading ? (
+              {isLocalLoading ? (
                   <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
               ) : (
                   <>
