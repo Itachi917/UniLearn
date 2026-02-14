@@ -77,7 +77,7 @@ const Quiz: React.FC<Props> = ({ questions, onComplete }) => {
   const markShortAnswer = async (userAns: string, modelAns: string) => {
       setIsMarking(true);
       try {
-          const ai = new GoogleGenAI({ apiKey: (process as any).env.API_KEY });
+          const ai = new GoogleGenAI({ apiKey: 'AIzaSyCkoVKHYFUXNwmIKGN2LEyRFX4Tqy6SAhY' });
           const response = await ai.models.generateContent({
               model: 'gemini-3-flash-preview',
               contents: `Evaluate the student's answer.

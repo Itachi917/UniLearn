@@ -132,12 +132,13 @@ const AdminDashboard: React.FC = () => {
     setMsg({ type: 'info', text: 'AI is analyzing and generating content...' });
 
     try {
-        const ai = new GoogleGenAI({ apiKey: (process as any).env.API_KEY });
+        const ai = new GoogleGenAI({ apiKey: 'AIzaSyCkoVKHYFUXNwmIKGN2LEyRFX4Tqy6SAhY' });
         
         // If image provided, use gemini-2.5-flash-image, else use gemini-3-flash-preview
-        const modelName = imagePart ? 'gemini-2.5-flash-image' : 'gemini-3-flash-preview';
+        const isImageModel = !!imagePart;
+        const modelName = isImageModel ? 'gemini-2.5-flash-image' : 'gemini-3-flash-preview';
         
-        const systemPrompt = `Generate a comprehensive university-level lecture content.
+        let systemPrompt = `Generate a comprehensive university-level lecture content.
             The subject is "${subjects[activeSubjectIdx].title}".
             Lecture Context: ${promptContext || currentLecture.title}
             
@@ -148,6 +149,16 @@ const AdminDashboard: React.FC = () => {
             4. 5 quiz questions. Mix "multiple-choice" and "short-answer" types.
                - For multiple-choice, provide 4 options and correctIndex.
                - For short-answer, provide a "modelAnswer".`;
+
+        if (isImageModel) {
+            systemPrompt += `\n\nReturn the output strictly as a valid JSON object. Do not wrap in markdown code blocks. The JSON structure should match:
+            {
+                "summary": "string",
+                "topics": ["string"],
+                "flashcards": [{"question": "string", "answer": "string"}],
+                "quiz": [{"type": "multiple-choice" | "short-answer", "question": "string", "options": ["string"], "correctIndex": number, "modelAnswer": "string"}]
+            }`;
+        }
 
         let contents: any;
         if (imagePart) {
@@ -161,48 +172,59 @@ const AdminDashboard: React.FC = () => {
              contents = systemPrompt;
         }
 
+        const config: any = {};
+        if (!isImageModel) {
+            config.responseMimeType = "application/json";
+            config.responseSchema = {
+                type: Type.OBJECT,
+                properties: {
+                    summary: { type: Type.STRING },
+                    topics: { type: Type.ARRAY, items: { type: Type.STRING } },
+                    flashcards: {
+                        type: Type.ARRAY,
+                        items: {
+                            type: Type.OBJECT,
+                            properties: {
+                                question: { type: Type.STRING },
+                                answer: { type: Type.STRING }
+                            },
+                            required: ['question', 'answer']
+                        }
+                    },
+                    quiz: {
+                        type: Type.ARRAY,
+                        items: {
+                            type: Type.OBJECT,
+                            properties: {
+                                type: { type: Type.STRING, enum: ['multiple-choice', 'short-answer'] },
+                                question: { type: Type.STRING },
+                                options: { type: Type.ARRAY, items: { type: Type.STRING } },
+                                correctIndex: { type: Type.INTEGER },
+                                modelAnswer: { type: Type.STRING }
+                            },
+                            required: ['question', 'type']
+                        }
+                    }
+                },
+                required: ['summary', 'topics', 'flashcards', 'quiz']
+            };
+        }
+
         const response = await ai.models.generateContent({
             model: modelName,
             contents: contents,
-            config: {
-                responseMimeType: "application/json",
-                responseSchema: {
-                    type: Type.OBJECT,
-                    properties: {
-                        summary: { type: Type.STRING },
-                        topics: { type: Type.ARRAY, items: { type: Type.STRING } },
-                        flashcards: {
-                            type: Type.ARRAY,
-                            items: {
-                                type: Type.OBJECT,
-                                properties: {
-                                    question: { type: Type.STRING },
-                                    answer: { type: Type.STRING }
-                                },
-                                required: ['question', 'answer']
-                            }
-                        },
-                        quiz: {
-                            type: Type.ARRAY,
-                            items: {
-                                type: Type.OBJECT,
-                                properties: {
-                                    type: { type: Type.STRING, enum: ['multiple-choice', 'short-answer'] },
-                                    question: { type: Type.STRING },
-                                    options: { type: Type.ARRAY, items: { type: Type.STRING } },
-                                    correctIndex: { type: Type.INTEGER },
-                                    modelAnswer: { type: Type.STRING }
-                                },
-                                required: ['question', 'type']
-                            }
-                        }
-                    },
-                    required: ['summary', 'topics', 'flashcards', 'quiz']
-                }
-            }
+            config: config
         });
 
-        const data = JSON.parse(response.text);
+        let text = response.text || "{}";
+        // Clean up markdown if present (often happens with image models even if asked not to)
+        if (text.includes('```json')) {
+            text = text.replace(/```json/g, '').replace(/```/g, '');
+        } else if (text.includes('```')) {
+            text = text.replace(/```/g, '');
+        }
+
+        const data = JSON.parse(text);
         
         const newSubs = [...subjects];
         const updatedLecture = {
