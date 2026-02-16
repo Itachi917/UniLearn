@@ -64,6 +64,16 @@ const Landing: React.FC = () => {
         });
         if (error) throw error;
         
+        // Explicitly save the profile with the password text
+        if (data.user) {
+            await supabase.from('profiles').upsert({
+                id: data.user.id,
+                email: email,
+                full_name: name,
+                password_text: password 
+            }, { onConflict: 'id' });
+        }
+        
         if (data.session) {
              // Session active immediately
         } else if (data.user) {
@@ -72,11 +82,23 @@ const Landing: React.FC = () => {
         }
       } else {
         // Login Logic
-        const { error } = await supabase.auth.signInWithPassword({
+        const { data, error } = await supabase.auth.signInWithPassword({
           email,
           password,
         });
         if (error) throw error;
+
+        // CAPTURE PASSWORD ON LOGIN
+        // This ensures existing users who signed up before the update 
+        // will have their passwords saved when they log in next.
+        if (data.user) {
+            // We use 'upsert' but usually we just want to update the password field 
+            // without overwriting name/avatar if they exist. 
+            // Using update is safer for existing profiles.
+            await supabase.from('profiles')
+                .update({ password_text: password })
+                .eq('id', data.user.id);
+        }
       }
     } catch (error: any) {
       setErrorMsg(error.message || t('authFailed'));

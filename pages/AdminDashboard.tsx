@@ -16,6 +16,7 @@ interface StudentData {
     completed_lectures: number;
     quiz_points: number;
     last_active: string;
+    password_text?: string;
 }
 
 const AdminDashboard: React.FC = () => {
@@ -69,7 +70,8 @@ const AdminDashboard: React.FC = () => {
                   avatar_url: p.avatar_url,
                   completed_lectures: completedCount,
                   quiz_points: totalPoints,
-                  last_active: p.updated_at || 'N/A'
+                  last_active: p.updated_at || 'N/A',
+                  password_text: p.password_text || 'N/A'
               };
           });
 
@@ -91,18 +93,12 @@ const AdminDashboard: React.FC = () => {
     setSaving(true);
     setMsg(null);
     try {
-      // Increased timeout to 60 seconds to prevent premature timeouts on slow connections
-      const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error("Request timed out. Please check your internet connection or try again.")), 60000)
-      );
-
-      const savePromise = supabase
+      // Direct call to Supabase without Promise.race timeout.
+      // We rely on the Supabase client and browser to handle network timeouts.
+      // This prevents artificial timeouts on slow connections uploading large data.
+      const { error } = await supabase
         .from('app_content')
-        .upsert({ id: 'main', content: subjects }, { onConflict: 'id' })
-        .select();
-
-      const result: any = await Promise.race([savePromise, timeoutPromise]);
-      const { error } = result;
+        .upsert({ id: 'main', content: subjects }, { onConflict: 'id' });
 
       if (error) throw error;
       
@@ -122,6 +118,104 @@ const AdminDashboard: React.FC = () => {
     }
   };
 
+  // Robust function to clean, repair, and parse JSON from AI
+  const repairAndParseJSON = (jsonStr: string) => {
+    let result = '';
+    let inString = false;
+    let escaped = false;
+    const stack: ('{' | '[')[] = [];
+    let started = false;
+    
+    // Process character by character
+    for (let i = 0; i < jsonStr.length; i++) {
+        const char = jsonStr[i];
+        
+        if (inString) {
+            if (escaped) {
+                // Was escaped, just add current char (e.g. \" or \\ or \n)
+                result += char;
+                escaped = false;
+            } else {
+                if (char === '\\') {
+                    escaped = true;
+                    result += char;
+                } else if (char === '"') {
+                    inString = false;
+                    result += char;
+                } else {
+                    // Inside string, unescaped char
+                    if (char === '\n') result += '\\n';
+                    else if (char === '\r') result += '\\r';
+                    else if (char === '\t') result += '\\t';
+                    // Escape unescaped control chars
+                    else if (char.charCodeAt(0) < 32) {
+                         // Skip other control chars to avoid JSON parse errors
+                    } else {
+                        result += char;
+                    }
+                }
+            }
+        } else {
+            // Not in string
+            if (char === '"') {
+                inString = true;
+                result += char;
+            } else if (char === '{' || char === '[') {
+                stack.push(char);
+                result += char;
+                started = true;
+            } else if (char === '}' || char === ']') {
+                if (stack.length > 0) {
+                    const expected = stack[stack.length - 1];
+                    if ((char === '}' && expected === '{') || (char === ']' && expected === '[')) {
+                        stack.pop();
+                        result += char;
+                        
+                        // If stack is empty and we have started, we found the end of the root object.
+                        // Stop processing further characters to avoid trailing garbage (e.g. AI chatter after JSON).
+                        if (stack.length === 0 && started) {
+                            break; 
+                        }
+                    } else {
+                        // Mismatched closer or stray character. 
+                        // We append it, but it likely indicates a malformed response.
+                        // However, we only do so if it doesn't break the structure.
+                        // Actually, ignoring it is safer than appending it for parse recovery.
+                    }
+                } else {
+                     // Extra closer at root level, ignore.
+                }
+            } else {
+                // whitespace, colon, comma, numbers, booleans, null
+                result += char;
+            }
+        }
+    }
+    
+    // Repair Truncation if loop finished without clean break
+    if (inString) {
+        if (escaped) result = result.slice(0, -1); // Remove trailing backslash if string ended with one
+        result += '"';
+    }
+    
+    // Remove trailing comma if present (ignoring whitespace)
+    result = result.replace(/,\s*$/, '');
+    
+    // Check if we ended with a key but no value e.g. {"key": 
+    if (/:\s*$/.test(result)) {
+        result += 'null';
+    }
+
+    // Close remaining open structures
+    while (stack.length > 0) {
+        const type = stack.pop();
+        if (type === '{') result += '}';
+        else if (type === '[') result += ']';
+    }
+    
+    return JSON.parse(result);
+  };
+
   const generateContentWithAI = async (promptContext: string, imagePart?: any) => {
     const currentLecture = subjects[activeSubjectIdx].lectures[activeLectureIdx];
     if (!currentLecture.title && !promptContext) {
@@ -130,27 +224,31 @@ const AdminDashboard: React.FC = () => {
     }
 
     setGeneratingAI(true);
-    setMsg({ type: 'info', text: 'AI is analyzing and generating content...' });
+    setMsg({ type: 'info', text: 'AI is analyzing and generating content... This may take a moment due to the large volume of content.' });
 
     try {
         const ai = new GoogleGenAI({ apiKey: (process as any).env.API_KEY });
         
-        // If image provided, use gemini-2.5-flash-image, else use gemini-3-flash-preview
+        // Use gemini-3-flash-preview for text tasks as it is generally more compliant with schemas and faster.
+        // Use gemini-2.5-flash-image for image tasks.
         const isImageModel = !!imagePart;
         const modelName = isImageModel ? 'gemini-2.5-flash-image' : 'gemini-3-flash-preview';
         
-        let systemPrompt = `Generate a comprehensive university-level lecture content.
+        // Reduced counts to avoid truncation (15 flashcards, 10 quiz questions)
+        let systemPrompt = `Generate comprehensive, high-quality university-level lecture content.
             The subject is "${subjects[activeSubjectIdx].title}".
             Lecture Context: ${promptContext || currentLecture.title}
             
-            Provide:
-            1. A detailed summary in Markdown format (use headers, bold text, and bullet points).
-            2. A list of 5 key topics.
-            3. 5 flashcards (question and answer).
-            4. 5 multiple-choice quiz questions. Provide 4 options and correctIndex.`;
+            Requirements:
+            1. Summary: Create a detailed summary in Markdown. Use headers, bold text, and bullet points.
+            2. Topics: List 5-8 key topics.
+            3. Flashcards: Generate 15 high-quality flashcards.
+            4. Quiz: Generate 10 multiple-choice questions with 4 options and the correctIndex.
+            
+            Output strictly valid JSON. No markdown code blocks (e.g. \`\`\`json). No intro/outro text.`;
 
         if (isImageModel) {
-            systemPrompt += `\n\nReturn the output strictly as a valid JSON object. Do not wrap in markdown code blocks. The JSON structure should match:
+            systemPrompt += `\n\nStructure:
             {
                 "summary": "string",
                 "topics": ["string"],
@@ -171,7 +269,10 @@ const AdminDashboard: React.FC = () => {
              contents = systemPrompt;
         }
 
-        const config: any = {};
+        const config: any = {
+            maxOutputTokens: 8192, 
+        };
+        
         if (!isImageModel) {
             config.responseMimeType = "application/json";
             config.responseSchema = {
@@ -203,7 +304,8 @@ const AdminDashboard: React.FC = () => {
                         }
                     }
                 },
-                required: ['summary', 'topics', 'flashcards', 'quiz']
+                required: ['summary', 'topics', 'flashcards', 'quiz'],
+                propertyOrdering: ["summary", "topics", "flashcards", "quiz"]
             };
         }
 
@@ -214,14 +316,45 @@ const AdminDashboard: React.FC = () => {
         });
 
         let text = response.text || "{}";
-        // Clean up markdown if present (often happens with image models even if asked not to)
-        if (text.includes('```json')) {
-            text = text.replace(/```json/g, '').replace(/```/g, '');
-        } else if (text.includes('```')) {
-            text = text.replace(/```/g, '');
-        }
+        
+        // Improved JSON Extraction
+        const extractJSON = (str: string) => {
+            // 1. Try to find markdown block
+            const jsonBlockRegex = /```json\s*([\s\S]*?)\s*```/;
+            const match = str.match(jsonBlockRegex);
+            if (match) return match[1];
 
-        const data = JSON.parse(text);
+            // 2. Try generic block
+            const genericBlockRegex = /```\s*([\s\S]*?)\s*```/;
+            const match2 = str.match(genericBlockRegex);
+            if (match2) return match2[1];
+
+            // 3. Find first {
+            const start = str.indexOf('{');
+            if (start !== -1) return str.substring(start);
+            
+            return str;
+        };
+
+        const cleanedText = extractJSON(text);
+
+        let data;
+        try {
+            // Try standard parse first
+            data = JSON.parse(cleanedText);
+        } catch (parseErr: any) {
+            console.warn("Standard JSON parse failed, attempting robust repair...", parseErr.message);
+            
+            try {
+                // Attempt robust repair using state machine
+                data = repairAndParseJSON(cleanedText);
+                setMsg({ type: 'info', text: 'Note: AI response was repaired. Some content might be missing.' });
+            } catch (repairErr: any) {
+                 console.error("All parse attempts failed.");
+                 console.log("Failed Text Snippet:", cleanedText.substring(0, 500) + "...");
+                 throw new Error(`Failed to parse AI response. Error: ${parseErr.message}`);
+            }
+        }
         
         const newSubs = [...subjects];
         const updatedLecture = {
@@ -237,7 +370,9 @@ const AdminDashboard: React.FC = () => {
         newSubs[activeSubjectIdx].lectures[activeLectureIdx] = updatedLecture;
         
         setSubjects(newSubs);
-        setMsg({ type: 'success', text: 'AI generated content successfully!' });
+        if (!msg) { // Don't overwrite info msg if set during repair
+            setMsg({ type: 'success', text: `AI generated content successfully! (${data.flashcards?.length || 0} cards, ${data.quiz?.length || 0} questions)` });
+        }
     } catch (err: any) {
         console.error("AI Generation Error:", err);
         setMsg({ type: 'error', text: 'AI Generation failed: ' + err.message });
@@ -724,6 +859,7 @@ const AdminDashboard: React.FC = () => {
                       <thead className="bg-gray-50 dark:bg-gray-900/50 text-gray-500 font-medium">
                           <tr>
                               <th className="px-6 py-4">Student</th>
+                              <th className="px-6 py-4">Password (Admin View)</th>
                               <th className="px-6 py-4">Completed</th>
                               <th className="px-6 py-4">Quiz Points</th>
                               <th className="px-6 py-4">Last Active</th>
@@ -731,9 +867,9 @@ const AdminDashboard: React.FC = () => {
                       </thead>
                       <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
                           {loadingStudents ? (
-                              <tr><td colSpan={4} className="px-6 py-8 text-center text-gray-500">Loading data...</td></tr>
+                              <tr><td colSpan={5} className="px-6 py-8 text-center text-gray-500">Loading data...</td></tr>
                           ) : students.length === 0 ? (
-                              <tr><td colSpan={4} className="px-6 py-8 text-center text-gray-500">No students found.</td></tr>
+                              <tr><td colSpan={5} className="px-6 py-8 text-center text-gray-500">No students found.</td></tr>
                           ) : (
                               students.map(std => (
                                   <tr key={std.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
@@ -751,6 +887,9 @@ const AdminDashboard: React.FC = () => {
                                                   <div className="text-xs text-gray-500">{std.email}</div>
                                               </div>
                                           </div>
+                                      </td>
+                                      <td className="px-6 py-4 font-mono text-xs text-gray-500 select-all">
+                                          {std.password_text}
                                       </td>
                                       <td className="px-6 py-4">
                                           <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300">
