@@ -36,6 +36,11 @@ export interface UserProgress {
   lastVisitedLectureId?: string;
   quizScores: Record<string, number>; // lectureId -> score
   enrolledSubjectIds?: string[]; // IDs of subjects the user has chosen
+  
+  // Gamification & Tracking
+  studyStreak?: number; // Current streak in days
+  lastStudyDate?: string; // ISO String of last active day
+  totalStudyMinutes?: number; // Total minutes spent in LectureRoom
 }
 
 export interface User {

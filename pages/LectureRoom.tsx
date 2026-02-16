@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Navbar from '../components/layout/Navbar';
 import { useApp } from '../context/AppContext';
 import { useParams, Link } from 'react-router-dom';
-import { FileText, Layers, BrainCircuit, ChevronRight, CheckCircle, ChevronLeft, Shuffle, RefreshCw } from 'lucide-react';
+import { FileText, Layers, BrainCircuit, ChevronRight, CheckCircle, ChevronLeft, Shuffle, Download, Printer, FileType } from 'lucide-react';
 import Flashcard from '../components/ui/Flashcard';
 import Quiz from '../components/ui/Quiz';
 import ReactMarkdown from 'react-markdown';
@@ -10,7 +10,7 @@ import { Flashcard as IFlashcard } from '../types';
 
 const LectureRoom: React.FC = () => {
   const { subjectId, lectureId } = useParams<{ subjectId: string, lectureId: string }>();
-  const { t, language, markLectureComplete, updateQuizScore, progress, subjects } = useApp();
+  const { t, language, markLectureComplete, updateQuizScore, logStudyTime, progress, subjects } = useApp();
   const [activeTab, setActiveTab] = useState<'summary' | 'flashcards' | 'quiz'>('summary');
 
   const subject = subjects.find(s => s.id === subjectId);
@@ -20,10 +20,24 @@ const LectureRoom: React.FC = () => {
   const [deck, setDeck] = useState<IFlashcard[]>([]);
   const [currentCardIdx, setCurrentCardIdx] = useState(0);
 
+  // Time Tracking State
+  const startTimeRef = useRef(Date.now());
+
   useEffect(() => {
     if (lectureId) {
       markLectureComplete(lectureId);
     }
+    // Reset timer on mount
+    startTimeRef.current = Date.now();
+
+    return () => {
+        // Log time on unmount
+        const durationMs = Date.now() - startTimeRef.current;
+        const minutes = Math.floor(durationMs / 60000);
+        if (minutes > 0) {
+            logStudyTime(minutes);
+        }
+    };
   }, [lectureId]);
 
   // Reset/Init Deck when lecture changes
@@ -63,6 +77,34 @@ const LectureRoom: React.FC = () => {
       }
   };
 
+  // --- Export Functions ---
+  const downloadSummary = () => {
+      const element = document.createElement("a");
+      const file = new Blob([lecture.summary], {type: 'text/markdown'});
+      element.href = URL.createObjectURL(file);
+      element.download = `${lecture.title.replace(/\s+/g, '_')}_Summary.md`;
+      document.body.appendChild(element);
+      element.click();
+  };
+
+  const downloadFlashcardsCSV = () => {
+      if (!deck.length) return;
+      // Simple CSV escape
+      const escapeCsv = (str: string) => `"${str.replace(/"/g, '""')}"`;
+      const csvContent = "Question,Answer\n" + deck.map(e => `${escapeCsv(e.question)},${escapeCsv(e.answer)}`).join("\n");
+      
+      const element = document.createElement("a");
+      const file = new Blob([csvContent], {type: 'text/csv'});
+      element.href = URL.createObjectURL(file);
+      element.download = `${lecture.title.replace(/\s+/g, '_')}_Flashcards.csv`;
+      document.body.appendChild(element);
+      element.click();
+  };
+
+  const printQuiz = () => {
+      window.print();
+  };
+
   const tabs = [
     { id: 'summary', icon: FileText, label: t('summary') },
     { id: 'flashcards', icon: Layers, label: t('flashcards') },
@@ -73,9 +115,9 @@ const LectureRoom: React.FC = () => {
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex flex-col">
       <Navbar />
       
-      <main className="flex-grow max-w-5xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-8">
+      <main className="flex-grow max-w-5xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-8 print:w-full print:max-w-none">
         {/* Breadcrumb & Header */}
-        <div className="mb-8">
+        <div className="mb-8 no-print">
              <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400 mb-3">
                 <Link to={`/subject/${subject.id}`} className="hover:text-blue-600 dark:hover:text-blue-400 transition-colors">
                     {language === 'ar' ? subject.titleAr : subject.title}
@@ -86,16 +128,37 @@ const LectureRoom: React.FC = () => {
                 </span>
             </div>
             
-            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white flex items-center gap-3">
-                {language === 'ar' ? lecture.titleAr : lecture.title}
-                {progress.completedLectures.includes(lecture.id) && (
-                    <CheckCircle size={24} className="text-green-500 flex-shrink-0" />
-                )}
-            </h1>
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white flex items-center gap-3">
+                    {language === 'ar' ? lecture.titleAr : lecture.title}
+                    {progress.completedLectures.includes(lecture.id) && (
+                        <CheckCircle size={24} className="text-green-500 flex-shrink-0" />
+                    )}
+                </h1>
+
+                {/* Export Tools */}
+                <div className="flex gap-2">
+                    {activeTab === 'summary' && (
+                        <button onClick={downloadSummary} className="flex items-center gap-2 px-3 py-1.5 text-sm bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors text-gray-700 dark:text-gray-300">
+                            <Download size={16} /> MD
+                        </button>
+                    )}
+                    {activeTab === 'flashcards' && (
+                        <button onClick={downloadFlashcardsCSV} className="flex items-center gap-2 px-3 py-1.5 text-sm bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors text-gray-700 dark:text-gray-300">
+                            <FileType size={16} /> CSV
+                        </button>
+                    )}
+                    {activeTab === 'quiz' && (
+                        <button onClick={printQuiz} className="flex items-center gap-2 px-3 py-1.5 text-sm bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors text-gray-700 dark:text-gray-300">
+                            <Printer size={16} /> Print
+                        </button>
+                    )}
+                </div>
+            </div>
         </div>
 
         {/* Tab Navigation */}
-        <div className="flex border-b border-gray-200 dark:border-gray-700 mb-8 overflow-x-auto no-scrollbar">
+        <div className="flex border-b border-gray-200 dark:border-gray-700 mb-8 overflow-x-auto no-scrollbar no-print">
             {tabs.map(tab => (
                 <button
                     key={tab.id}
@@ -213,6 +276,12 @@ const LectureRoom: React.FC = () => {
 
             {activeTab === 'quiz' && (
                 <div className="max-w-2xl mx-auto">
+                    {/* Print Header - Visible only when printing */}
+                    <div className="hidden print-only mb-8">
+                        <h1 className="text-2xl font-bold">{lecture.title} - Quiz</h1>
+                        <p>Name: __________________________  Date: ______________</p>
+                    </div>
+
                     {lecture.quiz && lecture.quiz.length > 0 ? (
                         <Quiz questions={lecture.quiz} onComplete={handleQuizComplete} />
                     ) : (

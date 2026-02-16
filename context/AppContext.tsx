@@ -20,6 +20,7 @@ interface AppContextType {
   updateQuizScore: (lectureId: string, score: number) => void;
   updateUserProfile: (name: string, avatarUrl: string) => Promise<void>;
   enrollSubjects: (subjectIds: string[]) => void;
+  logStudyTime: (minutes: number) => void;
   t: (key: keyof typeof TRANSLATIONS['en']) => string;
   loginAsGuest: () => void;
   logout: () => void;
@@ -39,7 +40,10 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
   const [progress, setProgress] = useState<UserProgress>({
     completedLectures: [],
     quizScores: {},
-    enrolledSubjectIds: undefined 
+    enrolledSubjectIds: undefined,
+    studyStreak: 0,
+    lastStudyDate: '',
+    totalStudyMinutes: 0
   });
   const [subjects, setSubjects] = useState<Subject[]>(SEED_DATA);
   const [isLoading, setIsLoading] = useState(true);
@@ -73,6 +77,30 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
   useEffect(() => {
     refreshSubjects();
   }, [user?.uid]);
+
+  const calculateStreak = (lastDateStr?: string, currentStreak?: number) => {
+      const now = new Date();
+      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()); // Midnight today
+      
+      if (!lastDateStr) return { streak: 1, date: today.toISOString() };
+
+      const last = new Date(lastDateStr);
+      const lastDate = new Date(last.getFullYear(), last.getMonth(), last.getDate()); // Midnight last active
+      
+      const diffTime = Math.abs(today.getTime() - lastDate.getTime());
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
+
+      if (diffDays === 0) {
+          // Already studied today
+          return { streak: currentStreak || 1, date: today.toISOString() };
+      } else if (diffDays === 1) {
+          // Studied yesterday, increment
+          return { streak: (currentStreak || 0) + 1, date: today.toISOString() };
+      } else {
+          // Missed a day, reset
+          return { streak: 1, date: today.toISOString() };
+      }
+  };
 
   const loadUserData = async (authUser: any) => {
     try {
@@ -115,7 +143,25 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
             .maybeSingle();
             
         if (progressData && progressData.progress_data) {
-            setProgress(progressData.progress_data);
+            // Calculate Streak on Load
+            const dbProgress = progressData.progress_data;
+            const streakInfo = calculateStreak(dbProgress.lastStudyDate, dbProgress.studyStreak);
+            
+            const updatedProgress = {
+                ...dbProgress,
+                studyStreak: streakInfo.streak,
+                lastStudyDate: streakInfo.date
+            };
+            
+            setProgress(updatedProgress);
+
+            // Save updated streak if it changed
+            if (streakInfo.streak !== dbProgress.studyStreak || streakInfo.date !== dbProgress.lastStudyDate) {
+                 await supabase.from('user_progress').upsert({
+                    user_id: authUser.id,
+                    progress_data: updatedProgress
+                });
+            }
         }
     } catch (err) {
         console.error("Error in loadUserData:", err);
@@ -304,13 +350,23 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
           enrolledSubjectIds: subjectIds
       });
   };
+  
+  const logStudyTime = (minutes: number) => {
+      const currentTotal = progress.totalStudyMinutes || 0;
+      saveProgress({
+          ...progress,
+          totalStudyMinutes: currentTotal + minutes
+      });
+  };
 
   const loginAsGuest = () => {
     setUser({ uid: 'guest', email: null, isGuest: true, name: 'Guest Student' });
     setProgress({ 
         completedLectures: [], 
         quizScores: {},
-        enrolledSubjectIds: SEED_DATA.map(s => s.id) 
+        enrolledSubjectIds: SEED_DATA.map(s => s.id),
+        studyStreak: 1,
+        totalStudyMinutes: 0
     });
     // Ensure we have fresh subjects even if we just logged in as guest
     refreshSubjects();
@@ -361,6 +417,7 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
       updateQuizScore,
       updateUserProfile,
       enrollSubjects,
+      logStudyTime,
       t,
       loginAsGuest,
       logout,
