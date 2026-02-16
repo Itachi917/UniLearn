@@ -1,12 +1,13 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { User, UserProgress, Language, Subject } from '../types';
-import { TRANSLATIONS, SEED_DATA } from '../constants';
+import { User, UserProgress, Language, Subject, AppTheme } from '../types';
+import { TRANSLATIONS, SEED_DATA, APP_THEMES } from '../constants';
 import { supabase } from '../lib/supabase';
 
 interface AppContextType {
   user: User | null;
   language: Language;
   theme: 'light' | 'dark';
+  currentTheme: AppTheme;
   progress: UserProgress;
   subjects: Subject[];
   isLoading: boolean;
@@ -14,10 +15,12 @@ interface AppContextType {
   setUser: (user: User | null) => void;
   setLanguage: (lang: Language) => void;
   toggleTheme: () => void;
+  changeAppTheme: (themeId: string) => void;
   markLectureComplete: (lectureId: string) => void;
   updateQuizScore: (lectureId: string, score: number) => void;
   updateUserProfile: (name: string, avatarUrl: string) => Promise<void>;
   enrollSubjects: (subjectIds: string[]) => void;
+  logStudyTime: (minutes: number) => void;
   t: (key: keyof typeof TRANSLATIONS['en']) => string;
   loginAsGuest: () => void;
   logout: () => void;
@@ -32,16 +35,22 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [language, setLanguage] = useState<Language>('en');
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
+  const [currentThemeId, setCurrentThemeId] = useState<string>('default');
+  
   const [progress, setProgress] = useState<UserProgress>({
     completedLectures: [],
     quizScores: {},
-    enrolledSubjectIds: undefined 
+    enrolledSubjectIds: undefined,
+    studyStreak: 0,
+    lastStudyDate: '',
+    totalStudyMinutes: 0
   });
   const [subjects, setSubjects] = useState<Subject[]>(SEED_DATA);
   const [isLoading, setIsLoading] = useState(true);
 
   // Computed
   const isAdmin = user?.email === 'asm977661@gmail.com';
+  const currentTheme = APP_THEMES.find(t => t.id === currentThemeId) || APP_THEMES[0];
 
   const refreshSubjects = async () => {
     try {
@@ -68,6 +77,30 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
   useEffect(() => {
     refreshSubjects();
   }, [user?.uid]);
+
+  const calculateStreak = (lastDateStr?: string, currentStreak?: number) => {
+      const now = new Date();
+      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()); // Midnight today
+      
+      if (!lastDateStr) return { streak: 1, date: today.toISOString() };
+
+      const last = new Date(lastDateStr);
+      const lastDate = new Date(last.getFullYear(), last.getMonth(), last.getDate()); // Midnight last active
+      
+      const diffTime = Math.abs(today.getTime() - lastDate.getTime());
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
+
+      if (diffDays === 0) {
+          // Already studied today
+          return { streak: currentStreak || 1, date: today.toISOString() };
+      } else if (diffDays === 1) {
+          // Studied yesterday, increment
+          return { streak: (currentStreak || 0) + 1, date: today.toISOString() };
+      } else {
+          // Missed a day, reset
+          return { streak: 1, date: today.toISOString() };
+      }
+  };
 
   const loadUserData = async (authUser: any) => {
     try {
@@ -110,7 +143,25 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
             .maybeSingle();
             
         if (progressData && progressData.progress_data) {
-            setProgress(progressData.progress_data);
+            // Calculate Streak on Load
+            const dbProgress = progressData.progress_data;
+            const streakInfo = calculateStreak(dbProgress.lastStudyDate, dbProgress.studyStreak);
+            
+            const updatedProgress = {
+                ...dbProgress,
+                studyStreak: streakInfo.streak,
+                lastStudyDate: streakInfo.date
+            };
+            
+            setProgress(updatedProgress);
+
+            // Save updated streak if it changed
+            if (streakInfo.streak !== dbProgress.studyStreak || streakInfo.date !== dbProgress.lastStudyDate) {
+                 await supabase.from('user_progress').upsert({
+                    user_id: authUser.id,
+                    progress_data: updatedProgress
+                });
+            }
         }
     } catch (err) {
         console.error("Error in loadUserData:", err);
@@ -201,6 +252,7 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
     }
   };
 
+  // Theme Logic
   useEffect(() => {
     if (theme === 'dark') {
       document.documentElement.classList.add('dark');
@@ -208,6 +260,43 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
       document.documentElement.classList.remove('dark');
     }
   }, [theme]);
+
+  // Apply CSS Variables for currentTheme
+  useEffect(() => {
+    const root = document.documentElement;
+    const body = document.body;
+
+    // 1. Set Colors
+    Object.entries(currentTheme.colors.primary).forEach(([shade, value]) => {
+      root.style.setProperty(`--color-primary-${shade}`, value);
+    });
+
+    // 2. Set Background
+    if (currentTheme.backgroundImage) {
+      body.style.backgroundImage = `url('${currentTheme.backgroundImage}')`;
+    } else {
+      body.style.backgroundImage = 'none';
+    }
+
+    // 3. Set Surfaces & Card
+    if (currentTheme.colors.surface) {
+         root.style.setProperty('--color-surface-50', currentTheme.colors.surface[50]);
+         root.style.setProperty('--color-surface-800', currentTheme.colors.surface[800]);
+         root.style.setProperty('--color-surface-900', currentTheme.colors.surface[900]);
+    } else {
+         // Reset to defaults
+         root.style.setProperty('--color-surface-50', '#f9fafb');
+         root.style.setProperty('--color-surface-800', '#1f2937');
+         root.style.setProperty('--color-surface-900', '#111827');
+    }
+
+    if (currentTheme.colors.card) {
+        root.style.setProperty('--color-card', currentTheme.colors.card);
+    } else {
+        root.style.setProperty('--color-card', '#ffffff');
+    }
+
+  }, [currentTheme]);
 
   useEffect(() => {
     if (language === 'ar') {
@@ -261,13 +350,23 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
           enrolledSubjectIds: subjectIds
       });
   };
+  
+  const logStudyTime = (minutes: number) => {
+      const currentTotal = progress.totalStudyMinutes || 0;
+      saveProgress({
+          ...progress,
+          totalStudyMinutes: currentTotal + minutes
+      });
+  };
 
   const loginAsGuest = () => {
     setUser({ uid: 'guest', email: null, isGuest: true, name: 'Guest Student' });
     setProgress({ 
         completedLectures: [], 
         quizScores: {},
-        enrolledSubjectIds: SEED_DATA.map(s => s.id) 
+        enrolledSubjectIds: SEED_DATA.map(s => s.id),
+        studyStreak: 1,
+        totalStudyMinutes: 0
     });
     // Ensure we have fresh subjects even if we just logged in as guest
     refreshSubjects();
@@ -284,11 +383,16 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
         setUser(null);
         setProgress({ completedLectures: [], quizScores: {} });
         setIsLoading(false);
+        changeAppTheme('default'); // Reset theme on logout
     }
   };
 
   const toggleTheme = () => {
     setTheme(prev => prev === 'light' ? 'dark' : 'light');
+  };
+
+  const changeAppTheme = (themeId: string) => {
+    setCurrentThemeId(themeId);
   };
 
   const t = (key: keyof typeof TRANSLATIONS['en']) => {
@@ -300,6 +404,7 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
       user,
       language,
       theme,
+      currentTheme,
       progress,
       subjects,
       isLoading,
@@ -307,10 +412,12 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
       setUser,
       setLanguage,
       toggleTheme,
+      changeAppTheme,
       markLectureComplete,
       updateQuizScore,
       updateUserProfile,
       enrollSubjects,
+      logStudyTime,
       t,
       loginAsGuest,
       logout,

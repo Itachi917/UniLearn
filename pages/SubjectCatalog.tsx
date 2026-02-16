@@ -37,7 +37,7 @@ const SubjectSelectionModal: React.FC<{
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-      <div className="bg-white dark:bg-gray-800 w-full max-w-2xl rounded-2xl shadow-2xl flex flex-col max-h-[90vh]">
+      <div className="bg-card dark:bg-gray-800 w-full max-w-2xl rounded-2xl shadow-2xl flex flex-col max-h-[90vh]">
         <div className="p-6 border-b border-gray-100 dark:border-gray-700">
           <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">{t('welcomeTitle')}</h2>
           <p className="text-gray-500 dark:text-gray-400">
@@ -190,13 +190,13 @@ const SubjectCatalog: React.FC = () => {
                     placeholder={t('search')}
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
-                    className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                    className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-card dark:bg-gray-800 focus:ring-2 focus:ring-blue-500 outline-none transition-all"
                 />
             </div>
         </div>
 
         {filteredSubjects.length === 0 && (
-            <div className="text-center py-20 bg-white dark:bg-gray-800 rounded-2xl border border-dashed border-gray-300 dark:border-gray-700">
+            <div className="text-center py-20 bg-card dark:bg-gray-800 rounded-2xl border border-dashed border-gray-300 dark:border-gray-700">
                 <Book size={48} className="mx-auto text-gray-300 dark:text-gray-600 mb-4" />
                 <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-1">No subjects found</h3>
                 <p className="text-gray-500 mb-4">You haven't enrolled in any subjects matching your search.</p>
@@ -233,7 +233,7 @@ const SubjectCatalog: React.FC = () => {
                     <Link 
                         key={subject.id} 
                         to={`/subject/${subject.id}`}
-                        className="group bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-sm border border-gray-200 dark:border-gray-700 hover:shadow-lg transition-all duration-300 flex flex-col justify-between"
+                        className="group bg-card dark:bg-gray-800 rounded-2xl p-6 shadow-sm border border-gray-200 dark:border-gray-700 hover:shadow-lg transition-all duration-300 flex flex-col justify-between"
                     >
                         <div className="flex items-start justify-between mb-6">
                             <div className={`p-3 rounded-xl ${baseClasses} ${darkClasses}`}>

@@ -99,7 +99,7 @@ const Quiz: React.FC<Props> = ({ questions, onComplete }) => {
   // --- RENDER: SETUP ---
   if (!hasStarted) {
     return (
-      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-8 text-center">
+      <div className="bg-card dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-8 text-center">
         <div className="w-16 h-16 bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-full flex items-center justify-center mx-auto mb-6">
             <Clock size={32} />
         </div>
@@ -137,7 +137,7 @@ const Quiz: React.FC<Props> = ({ questions, onComplete }) => {
   // --- RENDER: RESULTS ---
   if (completed) {
     return (
-      <div className="text-center p-8 bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
+      <div className="text-center p-8 bg-card dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
         <h3 className="text-2xl font-bold mb-4">{t('score')}</h3>
         <div className="text-5xl font-black text-blue-600 mb-4">
           {Math.round((score / questions.length) * 100)}%
@@ -164,7 +164,7 @@ const Quiz: React.FC<Props> = ({ questions, onComplete }) => {
 
   // --- RENDER: ACTIVE QUIZ ---
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
+    <div className="bg-card dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
       {/* Header with Progress & Timer */}
       <div className="bg-gray-50 dark:bg-gray-900/50 p-4 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
         <span className="text-sm font-semibold text-gray-500 uppercase tracking-wide">

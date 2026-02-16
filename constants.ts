@@ -1,4 +1,68 @@
-import { Subject, Lecture } from './types';
+import { Subject, Lecture, AppTheme } from './types';
+
+// THEMES CONFIGURATION
+export const APP_THEMES: AppTheme[] = [
+  {
+    id: 'default',
+    name: 'Default Blue',
+    colors: {
+      primary: {
+        50: '#eff6ff', 100: '#dbeafe', 200: '#bfdbfe', 300: '#93c5fd', 400: '#60a5fa',
+        500: '#3b82f6', 600: '#2563eb', 700: '#1d4ed8', 800: '#1e40af', 900: '#1e3a8a',
+      }
+    },
+    isTransparent: false
+  },
+  {
+    id: 'pink-bow',
+    name: 'Pink Dream',
+    // Updated wallpaper as requested
+    backgroundImage: 'https://img.freepik.com/free-vector/pink-lips-with-pink-ribbon-pink-bow_306501-911.jpg?t=st=1771249244~exp=1771252844~hmac=c91f15dec82aa242ca6d69e49cbb593037415bd513d6fb7a5bf88d0e92c1bc54', 
+    colors: {
+      primary: {
+        50: '#fdf2f8', 100: '#fce7f3', 200: '#fbcfe8', 300: '#f9a8d4', 400: '#f472b6',
+        500: '#ec4899', 600: '#db2777', 700: '#be185d', 800: '#9d174d', 900: '#831843',
+      },
+      surface: {
+        50: 'rgba(255, 240, 245, 0.4)', // Very transparent page bg to show wallpaper
+        800: 'rgba(157, 23, 77, 0.8)',
+        900: 'rgba(131, 24, 67, 0.9)'
+      },
+      card: 'rgba(255, 255, 255, 0.85)' // Semi-transparent white/pinkish cards
+    },
+    isTransparent: true
+  },
+  {
+    id: 'midnight',
+    name: 'Cyber Neon',
+    backgroundImage: 'https://images.unsplash.com/photo-1550684848-fac1c5b4e853?q=80&w=2070', // Neon Cyberpunk
+    colors: {
+      primary: {
+        50: '#f5f3ff', 100: '#ede9fe', 200: '#ddd6fe', 300: '#c4b5fd', 400: '#a78bfa',
+        500: '#8b5cf6', 600: '#7c3aed', 700: '#6d28d9', 800: '#5b21b6', 900: '#4c1d95',
+      },
+      surface: {
+        50: 'rgba(20, 20, 30, 0.8)',
+        800: 'rgba(30, 30, 40, 0.8)',
+        900: 'rgba(15, 15, 25, 0.9)'
+      },
+      card: 'rgba(30, 27, 75, 0.7)'
+    },
+    isTransparent: true
+  },
+  {
+    id: 'forest',
+    name: 'Zen Forest',
+    backgroundImage: 'https://images.unsplash.com/photo-1448375240586-dfd8d395ea6c?q=80&w=2070', // Green Forest
+    colors: {
+        primary: {
+            50: '#ecfdf5', 100: '#d1fae5', 200: '#a7f3d0', 300: '#6ee7b7', 400: '#34d399',
+            500: '#10b981', 600: '#059669', 700: '#047857', 800: '#065f46', 900: '#064e3b',
+        }
+    },
+    isTransparent: true
+  }
+];
 
 // Seed Data Configuration
 export const SEED_DATA: Subject[] = [
@@ -261,6 +325,9 @@ export const TRANSLATIONS = {
     takingTooLong: "Taking too long? Click here to refresh",
     authFailed: "Authentication failed",
     accountCreated: "Account created successfully! You can now log in.",
+    // Theme
+    theme: "Theme",
+    selectTheme: "Select Theme",
   },
   ar: {
     login: "تسجيل الدخول",
@@ -319,5 +386,7 @@ export const TRANSLATIONS = {
     takingTooLong: "هل استغرق الأمر وقتاً طويلاً؟ انقر هنا للتحديث",
     authFailed: "فشلت عملية المصادقة",
     accountCreated: "تم إنشاء الحساب بنجاح! يمكنك تسجيل الدخول الآن.",
+    theme: "المظهر",
+    selectTheme: "اختر المظهر",
   }
 };

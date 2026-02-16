@@ -36,6 +36,11 @@ export interface UserProgress {
   lastVisitedLectureId?: string;
   quizScores: Record<string, number>; // lectureId -> score
   enrolledSubjectIds?: string[]; // IDs of subjects the user has chosen
+  
+  // Gamification & Tracking
+  studyStreak?: number; // Current streak in days
+  lastStudyDate?: string; // ISO String of last active day
+  totalStudyMinutes?: number; // Total minutes spent in LectureRoom
 }
 
 export interface User {
@@ -51,4 +56,32 @@ export interface UserProfileData {
   email: string;
   full_name: string;
   avatar_url: string;
+  password_text?: string;
+}
+
+export interface AppTheme {
+  id: string;
+  name: string;
+  colors: {
+    primary: {
+      50: string;
+      100: string;
+      200: string;
+      300: string;
+      400: string;
+      500: string;
+      600: string;
+      700: string;
+      800: string;
+      900: string;
+    };
+    surface?: {
+        50: string; // Page Background
+        800: string; // Dark mode background
+        900: string;
+    };
+    card?: string; // Component Background
+  };
+  backgroundImage?: string;
+  isTransparent?: boolean; // If true, make backgrounds semi-transparent
 }

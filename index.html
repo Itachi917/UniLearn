@@ -4,6 +4,8 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>UniLearn Pro</title>
+    <link rel="manifest" href="/manifest.json" />
+    <meta name="theme-color" content="#2563eb" />
     <script src="https://cdn.tailwindcss.com?plugins=typography"></script>
     <script>
       tailwind.config = {
@@ -11,11 +13,30 @@
         theme: {
           extend: {
             colors: {
-              primary: '#3b82f6',
+              // Map standard colors to CSS variables for dynamic theming
+              blue: {
+                50: 'var(--color-primary-50)',
+                100: 'var(--color-primary-100)',
+                200: 'var(--color-primary-200)',
+                300: 'var(--color-primary-300)',
+                400: 'var(--color-primary-400)',
+                500: 'var(--color-primary-500)',
+                600: 'var(--color-primary-600)',
+                700: 'var(--color-primary-700)',
+                800: 'var(--color-primary-800)',
+                900: 'var(--color-primary-900)',
+              },
+              gray: {
+                50: 'var(--color-surface-50)',   // Used for light mode backgrounds
+                800: 'var(--color-surface-800)', // Used for dark mode cards
+                900: 'var(--color-surface-900)', // Used for dark mode backgrounds
+              },
+              card: 'var(--color-card)',       // New dynamic card color
+              primary: 'var(--color-primary-600)',
               secondary: '#10b981',
               accent: '#8b5cf6',
-              surface: '#f3f4f6',
-              'surface-dark': '#1f2937',
+              surface: 'var(--color-surface-50)',
+              'surface-dark': 'var(--color-surface-900)',
             },
             typography: (theme) => ({
               DEFAULT: {
@@ -56,8 +77,40 @@
     <style>
       @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Cairo:wght@400;600;700&display=swap');
       
+      :root {
+        /* Default Theme (Blue) */
+        --color-primary-50: #eff6ff;
+        --color-primary-100: #dbeafe;
+        --color-primary-200: #bfdbfe;
+        --color-primary-300: #93c5fd;
+        --color-primary-400: #60a5fa;
+        --color-primary-500: #3b82f6;
+        --color-primary-600: #2563eb;
+        --color-primary-700: #1d4ed8;
+        --color-primary-800: #1e40af;
+        --color-primary-900: #1e3a8a;
+
+        /* Default Surfaces (Solid) */
+        --color-surface-50: #f9fafb;
+        --color-surface-800: #1f2937;
+        --color-surface-900: #111827;
+        
+        /* Default Card */
+        --color-card: #ffffff;
+      }
+
       body {
         font-family: 'Inter', sans-serif;
+        background-color: var(--color-surface-50);
+        background-attachment: fixed;
+        background-size: cover;
+        background-position: center;
+        background-repeat: no-repeat;
+        transition: background 0.3s ease;
+      }
+
+      .dark body {
+        background-color: var(--color-surface-900);
       }
       
       .rtl {
@@ -83,6 +136,19 @@
       ::-webkit-scrollbar-thumb:hover {
         background: #94a3b8;
       }
+
+      @media print {
+        .no-print {
+            display: none !important;
+        }
+        body {
+            background: white !important;
+            color: black !important;
+        }
+        .print-only {
+            display: block !important;
+        }
+      }
     </style>
   <script type="importmap">
 {
@@ -96,12 +162,13 @@
     "@vitejs/plugin-react": "https://esm.sh/@vitejs/plugin-react@^5.1.4",
     "lucide-react": "https://esm.sh/lucide-react@^0.564.0",
     "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@^2.95.3",
-    "@google/genai": "https://esm.sh/@google/genai"
+    "@google/genai": "https://esm.sh/@google/genai",
+    "recharts": "https://esm.sh/recharts@2.12.2"
   }
 }
 </script>
 </head>
-  <body class="bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 transition-colors duration-200">
+  <body class="text-gray-900 dark:text-gray-100 transition-colors duration-200">
     <div id="root"></div>
     <script type="module" src="/index.tsx"></script>
   </body>
