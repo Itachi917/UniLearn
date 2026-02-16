@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import Navbar from '../components/layout/Navbar';
 import { useApp } from '../context/AppContext';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { Book, ChevronRight, Search, BarChart3, Settings2, CheckCircle, Circle, ArrowRight } from 'lucide-react';
 import { Subject } from '../types';
 
@@ -11,15 +11,18 @@ const SubjectSelectionModal: React.FC<{
   subjects: Subject[];
   initialSelected: string[];
   onSave: (ids: string[]) => void;
-}> = ({ isOpen, subjects, initialSelected, onSave }) => {
+  levelName: string;
+}> = ({ isOpen, onClose, subjects, initialSelected, onSave, levelName }) => {
   const { t, language } = useApp();
   const [selected, setSelected] = useState<string[]>(initialSelected);
 
   useEffect(() => {
     if (isOpen) {
-        setSelected(initialSelected.length > 0 ? initialSelected : []);
+        // Ensure we only track selections present in the passed subjects list
+        const relevantSelected = initialSelected.filter(id => subjects.some(s => s.id === id));
+        setSelected(relevantSelected.length > 0 ? relevantSelected : []);
     }
-  }, [isOpen, initialSelected]);
+  }, [isOpen, initialSelected, subjects]);
 
   if (!isOpen) return null;
 
@@ -41,7 +44,7 @@ const SubjectSelectionModal: React.FC<{
         <div className="p-6 border-b border-gray-100 dark:border-gray-700">
           <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">{t('welcomeTitle')}</h2>
           <p className="text-gray-500 dark:text-gray-400">
-            {t('selectSubjectsPrompt')}
+            {t('selectSubjectsPrompt')} <span className="font-semibold text-blue-600">({levelName})</span>
           </p>
         </div>
         
@@ -82,7 +85,7 @@ const SubjectSelectionModal: React.FC<{
                                     {language === 'ar' ? sub.titleAr : sub.title}
                                 </h4>
                                 <span className={`text-xs px-2 py-0.5 rounded-full inline-block mt-1 bg-${sub.color}-100 text-${sub.color}-700 dark:bg-gray-700 dark:text-gray-300`}>
-                                    Level 2
+                                    {sub.level.replace('-', ' ')}
                                 </span>
                             </div>
                         </div>
@@ -91,11 +94,17 @@ const SubjectSelectionModal: React.FC<{
             </div>
         </div>
 
-        <div className="p-6 border-t border-gray-100 dark:border-gray-700 flex justify-end">
+        <div className="p-6 border-t border-gray-100 dark:border-gray-700 flex justify-end gap-3">
+            <button
+                onClick={onClose}
+                className="px-6 py-3 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-xl font-medium hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+            >
+                Cancel
+            </button>
             <button 
                 onClick={handleSave}
-                disabled={selected.length === 0}
-                className="flex items-center gap-2 px-8 py-3 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                // Allow saving empty selection (dropping all subjects)
+                className="flex items-center gap-2 px-8 py-3 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 transition-colors"
             >
                 {t('startLearning')} <ArrowRight size={20} className="rtl:rotate-180" />
             </button>
@@ -109,6 +118,9 @@ const SubjectCatalog: React.FC = () => {
   const { t, language, progress, subjects, enrollSubjects, user } = useApp();
   const [searchTerm, setSearchTerm] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [searchParams] = useSearchParams();
+  
+  const currentLevel = searchParams.get('level') || 'Level-2';
 
   // Check if first time login (enrolledSubjectIds is undefined)
   useEffect(() => {
@@ -117,22 +129,32 @@ const SubjectCatalog: React.FC = () => {
     }
   }, [progress.enrolledSubjectIds, user]);
 
-  const handleEnrollmentSave = (ids: string[]) => {
-      enrollSubjects(ids);
+  // Filter subjects for the CURRENT LEVEL only
+  const levelSubjects = subjects.filter(s => s.level === currentLevel);
+  const levelName = currentLevel.replace('-', ' ');
+
+  // Get enrolled IDs that belong to THIS level
+  const enrolledIds = progress.enrolledSubjectIds || [];
+  const levelEnrolledIds = enrolledIds.filter(id => levelSubjects.some(s => s.id === id));
+
+  const handleEnrollmentSave = (newLevelIds: string[]) => {
+      // We must merge new selections for this level with existing selections for OTHER levels
+      // 1. Find all enrolled IDs that are NOT in this level
+      const otherLevelIds = enrolledIds.filter(id => !levelSubjects.some(s => s.id === id));
+      
+      // 2. Combine
+      const finalIds = [...otherLevelIds, ...newLevelIds];
+      
+      enrollSubjects(finalIds);
       setIsModalOpen(false);
   };
 
-  // Filter based on enrollment AND search term
-  const enrolledIds = progress.enrolledSubjectIds || [];
-  
-  // If enrollment is undefined (loading/first-time), show nothing or all.
-  // If enrollment is defined but empty, user actively deselected all.
-  // We want to filter subjects that are IN enrolledIds.
-  // However, if it is a guest, show all.
-  
+  // Logic for display list
+  // If guest: Show all level subjects
+  // If user: Show enrolled subjects in this level. 
   const subjectsToShow = user?.isGuest 
-    ? subjects 
-    : subjects.filter(s => enrolledIds.includes(s.id));
+    ? levelSubjects 
+    : levelSubjects.filter(s => levelEnrolledIds.includes(s.id));
 
   const filteredSubjects = subjectsToShow.filter(subject => {
     const term = searchTerm.toLowerCase();
@@ -155,10 +177,11 @@ const SubjectCatalog: React.FC = () => {
       
       <SubjectSelectionModal 
         isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)} // Prevent closing without saving if first time? Handled by disabled button
-        subjects={subjects}
-        initialSelected={enrolledIds}
+        onClose={() => setIsModalOpen(false)}
+        subjects={levelSubjects} // Only pass subjects for this level
+        initialSelected={levelEnrolledIds}
         onSave={handleEnrollmentSave}
+        levelName={levelName}
       />
       
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
@@ -167,7 +190,7 @@ const SubjectCatalog: React.FC = () => {
                 <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400 mb-2">
                     <Link to="/levels" className="hover:text-blue-600 dark:hover:text-blue-400 transition-colors">{t('backToLevels')}</Link>
                     <ChevronRight size={14} className="rtl:rotate-180" />
-                    <span className="text-gray-900 dark:text-white font-medium">Level 2</span>
+                    <span className="text-gray-900 dark:text-white font-medium">{levelName}</span>
                 </div>
                 <h1 className="text-3xl font-bold text-gray-900 dark:text-white flex items-center gap-4">
                     {t('subjects')}
@@ -199,10 +222,14 @@ const SubjectCatalog: React.FC = () => {
             <div className="text-center py-20 bg-card dark:bg-gray-800 rounded-2xl border border-dashed border-gray-300 dark:border-gray-700">
                 <Book size={48} className="mx-auto text-gray-300 dark:text-gray-600 mb-4" />
                 <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-1">No subjects found</h3>
-                <p className="text-gray-500 mb-4">You haven't enrolled in any subjects matching your search.</p>
+                <p className="text-gray-500 mb-4">
+                    {subjectsToShow.length === 0 
+                     ? "You haven't enrolled in any subjects for this level." 
+                     : "No subjects match your search."}
+                </p>
                 {!user?.isGuest && (
                     <button onClick={() => setIsModalOpen(true)} className="text-blue-600 hover:underline">
-                        Manage your enrolled subjects
+                        Manage your enrolled subjects for {levelName}
                     </button>
                 )}
             </div>
@@ -251,9 +278,14 @@ const SubjectCatalog: React.FC = () => {
                             <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
                                 {language === 'ar' ? subject.titleAr : subject.title}
                             </h3>
-                            <p className="text-sm text-gray-500 dark:text-gray-400">
-                                {subject.lectures.length} {t('lectures')}
-                            </p>
+                            <div className="flex justify-between items-end">
+                                <p className="text-sm text-gray-500 dark:text-gray-400">
+                                    {subject.lectures.length} {t('lectures')}
+                                </p>
+                                <span className="text-xs font-medium px-2 py-0.5 bg-gray-100 dark:bg-gray-700 rounded text-gray-500 dark:text-gray-400">
+                                    {subject.level.replace('-', ' ')}
+                                </span>
+                            </div>
                         </div>
 
                         {/* Progress Bar Visual */}

@@ -2,12 +2,12 @@ import React from 'react';
 import Navbar from '../components/layout/Navbar';
 import { useApp } from '../context/AppContext';
 import { Link } from 'react-router-dom';
-import { BookOpen, ChevronRight, Layers } from 'lucide-react';
+import { ChevronRight, Layers } from 'lucide-react';
 
 const levels = ['Level-1', 'Level-2', 'Level-3', 'Level-4'];
 
 const LevelSelection: React.FC = () => {
-  const { t, language } = useApp();
+  const { t, language, subjects } = useApp();
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
@@ -27,13 +27,14 @@ const LevelSelection: React.FC = () => {
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
           {levels.map((level, idx) => {
-            // Only Level 2 is active per requirements
-            const isActive = level === 'Level-2';
+            // Check if there are any subjects for this level
+            const hasSubjects = subjects.some(s => s.level === level);
+            const isActive = hasSubjects;
             
             return (
               <Link 
                 key={level}
-                to={isActive ? '/subjects' : '#'}
+                to={isActive ? `/subjects?level=${level}` : '#'}
                 className={`group relative p-8 rounded-2xl border transition-all duration-300 flex flex-col items-center justify-center text-center gap-4 ${
                   isActive 
                     ? 'bg-card dark:bg-gray-800 border-gray-200 dark:border-gray-700 hover:shadow-xl hover:-translate-y-1 hover:border-blue-500 dark:hover:border-blue-500 cursor-pointer' 

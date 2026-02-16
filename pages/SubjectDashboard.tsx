@@ -19,7 +19,7 @@ const SubjectDashboard: React.FC = () => {
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
         <div className="mb-8">
             <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400 mb-2">
-                <Link to="/subjects" className="hover:text-blue-600 dark:hover:text-blue-400 transition-colors">{t('backToSubjects')}</Link>
+                <Link to={`/subjects?level=${subject.level}`} className="hover:text-blue-600 dark:hover:text-blue-400 transition-colors">{t('backToSubjects')}</Link>
                 <ChevronRight size={14} className="rtl:rotate-180" />
                 <span className="text-gray-900 dark:text-white font-medium">{language === 'ar' ? subject.titleAr : subject.title}</span>
             </div>
