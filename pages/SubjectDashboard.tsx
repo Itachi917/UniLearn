@@ -38,7 +38,7 @@ const SubjectDashboard: React.FC = () => {
                     <Link 
                         key={lecture.id} 
                         to={`/lecture/${subject.id}/${lecture.id}`}
-                        className={`block bg-white dark:bg-gray-800 rounded-xl p-6 border transition-all ${
+                        className={`block bg-card dark:bg-gray-800 rounded-xl p-6 border transition-all ${
                             isLastVisited 
                             ? 'border-blue-500 ring-1 ring-blue-500 shadow-md' 
                             : 'border-gray-200 dark:border-gray-700 hover:border-blue-300 dark:hover:border-blue-700 hover:shadow-md'

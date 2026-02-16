@@ -19,7 +19,7 @@ const Flashcard: React.FC<Props> = ({ data }) => {
       <div className={`relative w-full h-full duration-500 transform-style-3d transition-transform ${isFlipped ? 'rotate-y-180' : ''}`}>
         
         {/* Front */}
-        <div className="absolute w-full h-full backface-hidden bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 p-8 flex flex-col items-center justify-center text-center">
+        <div className="absolute w-full h-full backface-hidden bg-card dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 p-8 flex flex-col items-center justify-center text-center">
           <div className="text-xs font-bold uppercase tracking-wider text-blue-500 mb-4">Question</div>
           <p className="text-xl font-medium text-gray-900 dark:text-white">{data.question}</p>
           <div className="absolute bottom-4 text-sm text-gray-400 flex items-center gap-2">

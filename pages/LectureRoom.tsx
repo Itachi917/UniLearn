@@ -115,7 +115,7 @@ const LectureRoom: React.FC = () => {
         {/* Content Area */}
         <div className="min-h-[400px]">
             {activeTab === 'summary' && (
-                <div className="bg-white dark:bg-gray-800 rounded-2xl p-8 shadow-sm border border-gray-200 dark:border-gray-700 prose dark:prose-invert max-w-none">
+                <div className="bg-card dark:bg-gray-800 rounded-2xl p-8 shadow-sm border border-gray-200 dark:border-gray-700 prose dark:prose-invert max-w-none">
                     <ReactMarkdown>{lecture.summary}</ReactMarkdown>
                     
                     {lecture.topics && (
@@ -143,7 +143,7 @@ const LectureRoom: React.FC = () => {
                                 <button 
                                     onClick={prevCard}
                                     disabled={currentCardIdx === 0}
-                                    className="hidden sm:flex p-4 rounded-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-lg text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 disabled:opacity-30 disabled:cursor-not-allowed transition-all hover:scale-110 active:scale-95"
+                                    className="hidden sm:flex p-4 rounded-full bg-card dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-lg text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 disabled:opacity-30 disabled:cursor-not-allowed transition-all hover:scale-110 active:scale-95"
                                     title={t('previous')}
                                 >
                                     <ChevronLeft size={32} className="rtl:rotate-180" />
@@ -161,7 +161,7 @@ const LectureRoom: React.FC = () => {
                                 <button 
                                     onClick={nextCard}
                                     disabled={currentCardIdx === deck.length - 1}
-                                    className="hidden sm:flex p-4 rounded-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-lg text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 disabled:opacity-30 disabled:cursor-not-allowed transition-all hover:scale-110 active:scale-95"
+                                    className="hidden sm:flex p-4 rounded-full bg-card dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-lg text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 disabled:opacity-30 disabled:cursor-not-allowed transition-all hover:scale-110 active:scale-95"
                                     title={t('next')}
                                 >
                                     <ChevronRight size={32} className="rtl:rotate-180" />
@@ -169,7 +169,7 @@ const LectureRoom: React.FC = () => {
                             </div>
                             
                             {/* Controls Bar (Mobile Nav + Shuffle) */}
-                            <div className="flex items-center justify-between bg-white dark:bg-gray-800 p-4 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm max-w-xl mx-auto w-full">
+                            <div className="flex items-center justify-between bg-card dark:bg-gray-800 p-4 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm max-w-xl mx-auto w-full">
                                 {/* Mobile Previous */}
                                 <button 
                                     onClick={prevCard}
@@ -204,7 +204,7 @@ const LectureRoom: React.FC = () => {
                             </div>
                         </div>
                     ) : (
-                        <div className="text-center py-12 text-gray-500 dark:text-gray-400 bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700">
+                        <div className="text-center py-12 text-gray-500 dark:text-gray-400 bg-card dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700">
                             No flashcards available for this lecture yet.
                         </div>
                     )}
@@ -216,7 +216,7 @@ const LectureRoom: React.FC = () => {
                     {lecture.quiz && lecture.quiz.length > 0 ? (
                         <Quiz questions={lecture.quiz} onComplete={handleQuizComplete} />
                     ) : (
-                        <div className="text-center py-12 text-gray-500 dark:text-gray-400 bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700">
+                        <div className="text-center py-12 text-gray-500 dark:text-gray-400 bg-card dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700">
                             No quiz available for this lecture yet.
                         </div>
                     )}

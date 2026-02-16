@@ -152,13 +152,13 @@ const Landing: React.FC = () => {
       {/* Language Switcher */}
       <button
         onClick={() => setLanguage(language === 'en' ? 'ar' : 'en')}
-        className="absolute top-4 right-4 z-50 p-2 bg-white dark:bg-gray-800 rounded-full shadow-md text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+        className="absolute top-4 right-4 z-50 p-2 bg-card dark:bg-gray-800 rounded-full shadow-md text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
         title="Switch Language"
       >
         <Languages size={20} />
       </button>
 
-      <div className="max-w-4xl w-full grid md:grid-cols-2 gap-8 bg-white dark:bg-gray-800 rounded-2xl shadow-xl overflow-hidden border border-gray-100 dark:border-gray-700">
+      <div className="max-w-4xl w-full grid md:grid-cols-2 gap-8 bg-card dark:bg-gray-800 rounded-2xl shadow-xl overflow-hidden border border-gray-100 dark:border-gray-700">
         
         {/* Left Side: Branding */}
         <div className="p-8 md:p-12 bg-blue-600 text-white flex flex-col justify-between relative overflow-hidden min-h-[300px] md:min-h-full">
@@ -195,7 +195,7 @@ const Landing: React.FC = () => {
           {/* Toggle Switch */}
           <div className="flex bg-gray-100 dark:bg-gray-700 p-1 rounded-xl mb-6 relative">
              <div 
-               className={`absolute top-1 bottom-1 w-[calc(50%-4px)] bg-white dark:bg-gray-600 rounded-lg shadow-sm transition-all duration-300 ease-in-out ${isSignUp ? 'left-[calc(50%)]' : 'left-1'}`}
+               className={`absolute top-1 bottom-1 w-[calc(50%-4px)] bg-card dark:bg-gray-600 rounded-lg shadow-sm transition-all duration-300 ease-in-out ${isSignUp ? 'left-[calc(50%)]' : 'left-1'}`}
              ></div>
              <button 
                 onClick={() => { setIsSignUp(false); setErrorMsg(''); setSuccessMsg(''); }}
@@ -294,7 +294,7 @@ const Landing: React.FC = () => {
              <button
                 type="button"
                 onClick={handleGoogleLogin}
-                className="w-full bg-white dark:bg-gray-700 text-gray-700 dark:text-white border border-gray-300 dark:border-gray-600 font-semibold py-3 rounded-lg flex items-center justify-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors"
+                className="w-full bg-card dark:bg-gray-700 text-gray-700 dark:text-white border border-gray-300 dark:border-gray-600 font-semibold py-3 rounded-lg flex items-center justify-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors"
              >
                 <svg className="w-5 h-5" viewBox="0 0 24 24">
                     <path

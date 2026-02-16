@@ -53,3 +53,30 @@ export interface UserProfileData {
   avatar_url: string;
   password_text?: string;
 }
+
+export interface AppTheme {
+  id: string;
+  name: string;
+  colors: {
+    primary: {
+      50: string;
+      100: string;
+      200: string;
+      300: string;
+      400: string;
+      500: string;
+      600: string;
+      700: string;
+      800: string;
+      900: string;
+    };
+    surface?: {
+        50: string; // Page Background
+        800: string; // Dark mode background
+        900: string;
+    };
+    card?: string; // Component Background
+  };
+  backgroundImage?: string;
+  isTransparent?: boolean; // If true, make backgrounds semi-transparent
+}

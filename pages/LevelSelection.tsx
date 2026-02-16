@@ -36,7 +36,7 @@ const LevelSelection: React.FC = () => {
                 to={isActive ? '/subjects' : '#'}
                 className={`group relative p-8 rounded-2xl border transition-all duration-300 flex flex-col items-center justify-center text-center gap-4 ${
                   isActive 
-                    ? 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 hover:shadow-xl hover:-translate-y-1 hover:border-blue-500 dark:hover:border-blue-500 cursor-pointer' 
+                    ? 'bg-card dark:bg-gray-800 border-gray-200 dark:border-gray-700 hover:shadow-xl hover:-translate-y-1 hover:border-blue-500 dark:hover:border-blue-500 cursor-pointer' 
                     : 'bg-gray-100 dark:bg-gray-800/50 border-transparent opacity-60 cursor-not-allowed'
                 }`}
               >
