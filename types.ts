@@ -59,6 +59,18 @@ export interface UserProfileData {
   password_text?: string;
 }
 
+export interface FlashcardSuggestion {
+  id: string;
+  userId: string;
+  userName: string;
+  subjectId: string;
+  lectureId: string;
+  lectureTitle: string;
+  question: string;
+  answer: string;
+  timestamp: string;
+}
+
 export interface AppTheme {
   id: string;
   name: string;

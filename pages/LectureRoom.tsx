@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import Navbar from '../components/layout/Navbar';
 import { useApp } from '../context/AppContext';
 import { useParams, Link } from 'react-router-dom';
-import { FileText, Layers, BrainCircuit, ChevronRight, CheckCircle, ChevronLeft, Shuffle, Download, Printer, FileType } from 'lucide-react';
+import { FileText, Layers, BrainCircuit, ChevronRight, CheckCircle, ChevronLeft, Shuffle, Download, Printer, FileType, PlusCircle, X } from 'lucide-react';
 import Flashcard from '../components/ui/Flashcard';
 import Quiz from '../components/ui/Quiz';
 import ReactMarkdown from 'react-markdown';
@@ -10,7 +10,7 @@ import { Flashcard as IFlashcard } from '../types';
 
 const LectureRoom: React.FC = () => {
   const { subjectId, lectureId } = useParams<{ subjectId: string, lectureId: string }>();
-  const { t, language, markLectureComplete, updateQuizScore, logStudyTime, progress, subjects } = useApp();
+  const { t, language, markLectureComplete, updateQuizScore, logStudyTime, progress, subjects, user, submitFlashcardSuggestion } = useApp();
   const [activeTab, setActiveTab] = useState<'summary' | 'flashcards' | 'quiz'>('summary');
 
   const subject = subjects.find(s => s.id === subjectId);
@@ -19,6 +19,12 @@ const LectureRoom: React.FC = () => {
   // Flashcard Deck State
   const [deck, setDeck] = useState<IFlashcard[]>([]);
   const [currentCardIdx, setCurrentCardIdx] = useState(0);
+
+  // Suggestion Modal State
+  const [isSuggestModalOpen, setIsSuggestModalOpen] = useState(false);
+  const [suggestionQ, setSuggestionQ] = useState('');
+  const [suggestionA, setSuggestionA] = useState('');
+  const [suggestionStatus, setSuggestionStatus] = useState<'idle' | 'submitting' | 'success' | 'error'>('idle');
 
   // Time Tracking State
   const startTimeRef = useRef(Date.now());
@@ -105,6 +111,32 @@ const LectureRoom: React.FC = () => {
       window.print();
   };
 
+  const handleSuggestSubmit = async (e: React.FormEvent) => {
+      e.preventDefault();
+      if (!suggestionQ.trim() || !suggestionA.trim()) return;
+      
+      setSuggestionStatus('submitting');
+      try {
+          await submitFlashcardSuggestion({
+              subjectId: subject.id,
+              lectureId: lecture.id,
+              lectureTitle: lecture.title,
+              question: suggestionQ,
+              answer: suggestionA
+          });
+          setSuggestionStatus('success');
+          setSuggestionQ('');
+          setSuggestionA('');
+          setTimeout(() => {
+              setIsSuggestModalOpen(false);
+              setSuggestionStatus('idle');
+          }, 2000);
+      } catch (error) {
+          console.error(error);
+          setSuggestionStatus('error');
+      }
+  };
+
   const tabs = [
     { id: 'summary', icon: FileText, label: t('summary') },
     { id: 'flashcards', icon: Layers, label: t('flashcards') },
@@ -112,9 +144,71 @@ const LectureRoom: React.FC = () => {
   ] as const;
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex flex-col">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex flex-col relative">
       <Navbar />
       
+      {/* Suggestion Modal */}
+      {isSuggestModalOpen && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fade-in">
+              <div className="bg-white dark:bg-gray-800 w-full max-w-md rounded-2xl shadow-xl p-6 relative">
+                  <button 
+                      onClick={() => setIsSuggestModalOpen(false)}
+                      className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
+                  >
+                      <X size={20} />
+                  </button>
+                  
+                  <h3 className="text-xl font-bold mb-1 text-gray-900 dark:text-white">Suggest a Flashcard</h3>
+                  <p className="text-sm text-gray-500 mb-6">Help improve this lecture by suggesting a new Q&A card.</p>
+                  
+                  {suggestionStatus === 'success' ? (
+                      <div className="py-8 text-center text-green-600 dark:text-green-400 animate-pulse">
+                          <CheckCircle size={48} className="mx-auto mb-2" />
+                          <p className="font-semibold">Suggestion Sent!</p>
+                          <p className="text-xs">The admin will review it shortly.</p>
+                      </div>
+                  ) : (
+                      <form onSubmit={handleSuggestSubmit} className="space-y-4">
+                          <div>
+                              <label className="block text-xs font-medium text-gray-500 mb-1">Question</label>
+                              <textarea 
+                                  value={suggestionQ}
+                                  onChange={(e) => setSuggestionQ(e.target.value)}
+                                  className="w-full p-3 rounded-lg border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 text-sm focus:ring-2 focus:ring-blue-500 outline-none resize-none"
+                                  rows={3}
+                                  placeholder="Enter the question..."
+                                  required
+                              />
+                          </div>
+                          <div>
+                              <label className="block text-xs font-medium text-gray-500 mb-1">Answer</label>
+                              <textarea 
+                                  value={suggestionA}
+                                  onChange={(e) => setSuggestionA(e.target.value)}
+                                  className="w-full p-3 rounded-lg border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 text-sm focus:ring-2 focus:ring-blue-500 outline-none resize-none"
+                                  rows={3}
+                                  placeholder="Enter the answer..."
+                                  required
+                              />
+                          </div>
+                          
+                          {suggestionStatus === 'error' && (
+                              <p className="text-xs text-red-500">Failed to submit. Please try again.</p>
+                          )}
+
+                          <button 
+                              type="submit"
+                              disabled={suggestionStatus === 'submitting'}
+                              className="w-full py-2.5 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition-colors disabled:opacity-70"
+                          >
+                              {suggestionStatus === 'submitting' ? 'Sending...' : 'Submit Suggestion'}
+                          </button>
+                      </form>
+                  )}
+              </div>
+          </div>
+      )}
+
       <main className="flex-grow max-w-5xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-8 print:w-full print:max-w-none">
         {/* Breadcrumb & Header */}
         <div className="mb-8 no-print">
@@ -265,17 +359,39 @@ const LectureRoom: React.FC = () => {
                                     <ChevronRight size={24} className="rtl:rotate-180" />
                                 </button>
                             </div>
+                            
+                            {/* Suggestion Button - Only for logged in users */}
+                            {user && !user.isGuest && (
+                                <div className="text-center">
+                                    <button 
+                                        onClick={() => setIsSuggestModalOpen(true)}
+                                        className="inline-flex items-center gap-2 text-sm text-gray-500 hover:text-blue-600 dark:text-gray-400 dark:hover:text-blue-400 transition-colors"
+                                    >
+                                        <PlusCircle size={16} />
+                                        Suggest a Flashcard
+                                    </button>
+                                </div>
+                            )}
                         </div>
                     ) : (
                         <div className="text-center py-12 text-gray-500 dark:text-gray-400 bg-card dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700">
-                            No flashcards available for this lecture yet.
+                            <p className="mb-4">No flashcards available for this lecture yet.</p>
+                            {user && !user.isGuest && (
+                                <button 
+                                    onClick={() => setIsSuggestModalOpen(true)}
+                                    className="inline-flex items-center gap-2 px-4 py-2 bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400 rounded-lg hover:bg-blue-100 transition-colors"
+                                >
+                                    <PlusCircle size={16} />
+                                    Be the first to suggest one
+                                </button>
+                            )}
                         </div>
                     )}
                 </div>
             )}
 
             {activeTab === 'quiz' && (
-                <div className="max-w-2xl mx-auto">
+                <div className="max-w-2xl mx-auto print:max-w-none print:w-full">
                     {/* Print Header - Visible only when printing */}
                     <div className="hidden print-only mb-8">
                         <h1 className="text-2xl font-bold">{lecture.title} - Quiz</h1>

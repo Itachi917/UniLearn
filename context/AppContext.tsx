@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { User, UserProgress, Language, Subject, AppTheme } from '../types';
+import { User, UserProgress, Language, Subject, AppTheme, FlashcardSuggestion } from '../types';
 import { TRANSLATIONS, SEED_DATA, APP_THEMES } from '../constants';
 import { supabase } from '../lib/supabase';
 
@@ -21,6 +21,7 @@ interface AppContextType {
   updateUserProfile: (name: string, avatarUrl: string) => Promise<void>;
   enrollSubjects: (subjectIds: string[]) => void;
   logStudyTime: (minutes: number) => void;
+  submitFlashcardSuggestion: (suggestion: Omit<FlashcardSuggestion, 'id' | 'timestamp' | 'userId' | 'userName'>) => Promise<void>;
   t: (key: keyof typeof TRANSLATIONS['en']) => string;
   loginAsGuest: () => void;
   logout: () => void;
@@ -359,6 +360,33 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
       });
   };
 
+  const submitFlashcardSuggestion = async (suggestion: Omit<FlashcardSuggestion, 'id' | 'timestamp' | 'userId' | 'userName'>) => {
+    if (!user) return;
+    
+    const newSuggestion: FlashcardSuggestion = {
+        ...suggestion,
+        id: `sugg-${Date.now()}`,
+        userId: user.uid,
+        userName: user.name || 'Anonymous',
+        timestamp: new Date().toISOString()
+    };
+
+    try {
+        // Fetch existing
+        const { data } = await supabase.from('app_content').select('content').eq('id', 'suggestions').maybeSingle();
+        const currentList = data?.content || [];
+        
+        // Append
+        await supabase.from('app_content').upsert({
+            id: 'suggestions',
+            content: [...currentList, newSuggestion]
+        });
+    } catch (e) {
+        console.error("Error submitting suggestion", e);
+        throw e;
+    }
+  };
+
   const loginAsGuest = () => {
     setUser({ uid: 'guest', email: null, isGuest: true, name: 'Guest Student' });
     setProgress({ 
@@ -418,6 +446,7 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
       updateUserProfile,
       enrollSubjects,
       logStudyTime,
+      submitFlashcardSuggestion,
       t,
       loginAsGuest,
       logout,

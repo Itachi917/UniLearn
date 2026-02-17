@@ -45,7 +45,7 @@ const UserProfile: React.FC = () => {
             const l = s.lectures.find(l => l.id === lecId);
             if(l) title = l.title;
         });
-        return { name: title.substring(0, 15) + '...', fullTitle: title, score };
+        return { name: title.substring(0, 15) + '...', fullTitle: title, score: score as number };
     }).slice(-5); // Last 5 quizzes
   }, [progress.quizScores, subjects]);
 
@@ -53,7 +53,7 @@ const UserProfile: React.FC = () => {
     // Suggest review for lectures where quiz score < 4 (assuming out of 5 usually) or not visited recently
     // Simplified: Find up to 2 lectures with scores < 4
     const lowScores = Object.entries(progress.quizScores)
-        .filter(([_, score]) => score < 4)
+        .filter(([_, score]) => (score as number) < 4)
         .slice(0, 2)
         .map(([lecId]) => {
              let subId = '';

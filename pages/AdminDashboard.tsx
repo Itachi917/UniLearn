@@ -2,11 +2,11 @@ import React, { useState, useEffect, useRef } from 'react';
 import Navbar from '../components/layout/Navbar';
 import { useApp } from '../context/AppContext';
 import { supabase } from '../lib/supabase';
-import { Save, Plus, Trash2, Edit, ArrowLeft, Layers, Book, BrainCircuit, Users, Database, FileJson, Check, X, AlertCircle, Sparkles, Wand2, MessageSquarePlus, UploadCloud, FileText } from 'lucide-react';
-import { Subject, Lecture, Flashcard, QuizQuestion } from '../types';
+import { Save, Plus, Trash2, Edit, ArrowLeft, Layers, Book, BrainCircuit, Users, Database, FileJson, Check, X, AlertCircle, Sparkles, Wand2, MessageSquarePlus, UploadCloud, FileText, MessageSquare } from 'lucide-react';
+import { Subject, Lecture, Flashcard, QuizQuestion, FlashcardSuggestion } from '../types';
 import { GoogleGenAI, Type } from '@google/genai';
 
-type ViewMode = 'SUBJECT_LIST' | 'SUBJECT_EDIT' | 'LECTURE_EDIT' | 'STUDENT_LIST';
+type ViewMode = 'SUBJECT_LIST' | 'SUBJECT_EDIT' | 'LECTURE_EDIT' | 'STUDENT_LIST' | 'SUGGESTIONS';
 
 interface StudentData {
     id: string;
@@ -41,6 +41,10 @@ const AdminDashboard: React.FC = () => {
   // Student State
   const [students, setStudents] = useState<StudentData[]>([]);
   const [loadingStudents, setLoadingStudents] = useState(false);
+
+  // Suggestions State
+  const [suggestions, setSuggestions] = useState<FlashcardSuggestion[]>([]);
+  const [loadingSuggestions, setLoadingSuggestions] = useState(false);
 
   useEffect(() => {
     if (contextSubjects) {
@@ -83,9 +87,27 @@ const AdminDashboard: React.FC = () => {
       }
   };
 
+  const fetchSuggestions = async () => {
+      setLoadingSuggestions(true);
+      try {
+          const { data } = await supabase.from('app_content').select('content').eq('id', 'suggestions').maybeSingle();
+          if (data && Array.isArray(data.content)) {
+              setSuggestions(data.content);
+          } else {
+              setSuggestions([]);
+          }
+      } catch (e) {
+          console.error("Error fetching suggestions", e);
+      } finally {
+          setLoadingSuggestions(false);
+      }
+  };
+
   useEffect(() => {
       if (view === 'STUDENT_LIST') {
           fetchStudents();
+      } else if (view === 'SUGGESTIONS') {
+          fetchSuggestions();
       }
   }, [view]);
 
@@ -93,9 +115,6 @@ const AdminDashboard: React.FC = () => {
     setSaving(true);
     setMsg(null);
     try {
-      // Direct call to Supabase without Promise.race timeout.
-      // We rely on the Supabase client and browser to handle network timeouts.
-      // This prevents artificial timeouts on slow connections uploading large data.
       const { error } = await supabase
         .from('app_content')
         .upsert({ id: 'main', content: subjects }, { onConflict: 'id' });
@@ -116,6 +135,63 @@ const AdminDashboard: React.FC = () => {
     } finally {
       setSaving(false);
     }
+  };
+
+  const saveSuggestionsList = async (newList: FlashcardSuggestion[]) => {
+      try {
+          await supabase.from('app_content').upsert({
+              id: 'suggestions',
+              content: newList
+          });
+          setSuggestions(newList);
+      } catch (e) {
+          console.error("Error saving suggestions list", e);
+          alert("Failed to update suggestions list.");
+      }
+  };
+
+  const handleAcceptSuggestion = async (sugg: FlashcardSuggestion) => {
+      // 1. Find the subject and lecture
+      const subIdx = subjects.findIndex(s => s.id === sugg.subjectId);
+      if (subIdx === -1) {
+          alert("Subject not found. It might have been deleted.");
+          return;
+      }
+      const lecIdx = subjects[subIdx].lectures.findIndex(l => l.id === sugg.lectureId);
+      if (lecIdx === -1) {
+          alert("Lecture not found. It might have been deleted.");
+          return;
+      }
+
+      // 2. Add flashcard locally
+      const newSubjects = [...subjects];
+      const lecture = newSubjects[subIdx].lectures[lecIdx];
+      const newCard = { question: sugg.question, answer: sugg.answer };
+      lecture.flashcards = [...(lecture.flashcards || []), newCard];
+      
+      setSubjects(newSubjects);
+
+      // 3. Persist Content Changes immediately to avoid data loss if admin leaves
+      try {
+          await supabase.from('app_content').upsert({ id: 'main', content: newSubjects }, { onConflict: 'id' });
+          
+          // 4. Remove from suggestions list and persist
+          const newSuggestions = suggestions.filter(s => s.id !== sugg.id);
+          await saveSuggestionsList(newSuggestions);
+          
+          setMsg({ type: 'success', text: 'Suggestion accepted and added to lecture.' });
+          setTimeout(() => setMsg(null), 3000);
+          refreshSubjects(); // sync context
+      } catch (e) {
+          console.error("Error accepting suggestion", e);
+          alert("Error processing acceptance.");
+      }
+  };
+
+  const handleDeclineSuggestion = async (id: string) => {
+      if (!window.confirm("Are you sure you want to decline and remove this suggestion?")) return;
+      const newSuggestions = suggestions.filter(s => s.id !== id);
+      await saveSuggestionsList(newSuggestions);
   };
 
   // Robust function to clean, repair, and parse JSON from AI
@@ -482,6 +558,17 @@ const AdminDashboard: React.FC = () => {
           >
               <Users size={20} />
               Student Progress
+          </button>
+          <button 
+            onClick={() => setView('SUGGESTIONS')}
+            className={`flex items-center gap-3 p-3 rounded-lg text-left font-medium transition-colors ${
+                view === 'SUGGESTIONS'
+                ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400'
+                : 'text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800'
+            }`}
+          >
+              <MessageSquare size={20} />
+              Suggestions
           </button>
       </div>
   );
@@ -912,6 +999,61 @@ const AdminDashboard: React.FC = () => {
       </div>
   );
 
+  const renderSuggestionsList = () => (
+      <div className="space-y-6">
+          <div className="flex justify-between items-center">
+              <h2 className="text-xl font-semibold">Flashcard Suggestions</h2>
+              <button onClick={fetchSuggestions} className="text-sm text-blue-600 hover:underline">Refresh List</button>
+          </div>
+          
+          <div className="space-y-4">
+              {loadingSuggestions ? (
+                  <div className="text-center py-12 text-gray-500">Loading suggestions...</div>
+              ) : suggestions.length === 0 ? (
+                  <div className="text-center py-12 text-gray-500 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700">
+                      No pending suggestions.
+                  </div>
+              ) : (
+                  suggestions.map(sugg => (
+                      <div key={sugg.id} className="bg-white dark:bg-gray-800 p-6 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm">
+                          <div className="flex justify-between items-start mb-4">
+                              <div>
+                                  <div className="text-sm font-semibold text-blue-600 dark:text-blue-400 mb-1">{sugg.lectureTitle}</div>
+                                  <div className="text-xs text-gray-500">Suggested by <span className="font-medium text-gray-900 dark:text-white">{sugg.userName}</span> on {new Date(sugg.timestamp).toLocaleDateString()}</div>
+                              </div>
+                              <div className="flex gap-2">
+                                  <button 
+                                      onClick={() => handleAcceptSuggestion(sugg)}
+                                      className="flex items-center gap-1 px-3 py-1.5 bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 rounded-lg hover:bg-green-200 dark:hover:bg-green-900/50 text-sm font-medium"
+                                  >
+                                      <Check size={16} /> Accept
+                                  </button>
+                                  <button 
+                                      onClick={() => handleDeclineSuggestion(sugg.id)}
+                                      className="flex items-center gap-1 px-3 py-1.5 bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 rounded-lg hover:bg-red-200 dark:hover:bg-red-900/50 text-sm font-medium"
+                                  >
+                                      <X size={16} /> Decline
+                                  </button>
+                              </div>
+                          </div>
+                          
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                              <div className="p-4 bg-gray-50 dark:bg-gray-900/50 rounded-lg border border-gray-100 dark:border-gray-700">
+                                  <div className="text-xs font-bold text-gray-500 uppercase mb-2">Question</div>
+                                  <div className="text-gray-900 dark:text-white text-sm">{sugg.question}</div>
+                              </div>
+                              <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-100 dark:border-blue-900/30">
+                                  <div className="text-xs font-bold text-blue-500 uppercase mb-2">Answer</div>
+                                  <div className="text-gray-900 dark:text-white text-sm">{sugg.answer}</div>
+                              </div>
+                          </div>
+                      </div>
+                  ))
+              )}
+          </div>
+      </div>
+  );
+
   if (!isAdmin) {
     return <div className="p-12 text-center text-red-500">Access Denied</div>;
   }
@@ -971,6 +1113,7 @@ const AdminDashboard: React.FC = () => {
                 {view === 'SUBJECT_EDIT' && activeSubjectIdx !== -1 && renderSubjectEdit()}
                 {view === 'LECTURE_EDIT' && activeLectureIdx !== -1 && renderLectureEdit()}
                 {view === 'STUDENT_LIST' && renderStudentList()}
+                {view === 'SUGGESTIONS' && renderSuggestionsList()}
             </div>
         </div>
 
