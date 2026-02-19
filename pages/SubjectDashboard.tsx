@@ -168,17 +168,27 @@ const SubjectDashboard: React.FC = () => {
             {subject.lectures.map((lecture, index) => {
                 const isCompleted = progress.completedLectures.includes(lecture.id);
                 const isLastVisited = progress.lastVisitedLectureId === lecture.id;
-                
+                const hasContent = !!(lecture.summary?.trim() || (lecture.flashcards && lecture.flashcards.length > 0) || (lecture.quiz && lecture.quiz.length > 0));
+
                 return (
                     <Link 
                         key={lecture.id} 
-                        to={`/lecture/${subject.id}/${lecture.id}`}
-                        className={`block bg-card dark:bg-gray-800 rounded-xl p-6 border transition-all ${
+                        to={hasContent ? `/lecture/${subject.id}/${lecture.id}` : '#'}
+                        onClick={(e) => !hasContent && e.preventDefault()}
+                        className={`block bg-card dark:bg-gray-800 rounded-xl p-6 border transition-all relative overflow-hidden ${
                             isLastVisited 
                             ? 'border-blue-500 ring-1 ring-blue-500 shadow-md' 
-                            : 'border-gray-200 dark:border-gray-700 hover:border-blue-300 dark:hover:border-blue-700 hover:shadow-md'
+                            : hasContent 
+                                ? 'border-gray-200 dark:border-gray-700 hover:border-blue-300 dark:hover:border-blue-700 hover:shadow-md cursor-pointer'
+                                : 'border-gray-200 dark:border-gray-700 opacity-75 cursor-default'
                         }`}
                     >
+                        {!hasContent && (
+                            <div className="absolute top-0 right-0 bg-gray-500 text-white text-xs font-bold px-3 py-1 rounded-bl-xl z-10 shadow-sm">
+                                {language === 'ar' ? 'قريبا' : 'Coming Soon'}
+                            </div>
+                        )}
+
                         <div className="flex items-center justify-between">
                             <div className="flex items-center gap-4">
                                 <div className={`p-3 rounded-full ${

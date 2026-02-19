@@ -829,14 +829,14 @@ const AdminDashboard: React.FC = () => {
                                             value={q.correctAnswer || ''} 
                                             onChange={(e) => updateBankQuestion(qIdx, 'correctAnswer', e.target.value)}
                                             placeholder="Main Correct Answer" 
-                                            className="w-full p-2 text-sm border border-green-300 rounded bg-green-50 dark:bg-green-900/10"
+                                            className="w-full p-2 text-sm border border-green-300 rounded bg-green-50 dark:bg-green-900/10 text-gray-900 dark:text-gray-100"
                                         />
                                         <div className="text-xs text-gray-500">Accepted Variations (comma separated for display, handled as array):</div>
                                         <input 
                                             value={q.acceptedAnswers?.join(', ') || ''}
                                             onChange={(e) => updateBankQuestion(qIdx, 'acceptedAnswers', e.target.value.split(',').map(s => s.trim()))}
                                             placeholder="e.g. paris, Paris, City of Lights"
-                                            className="w-full p-2 text-xs border rounded bg-gray-50"
+                                            className="w-full p-2 text-xs border rounded bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100"
                                         />
                                     </div>
                                 ) : (
@@ -1180,14 +1180,14 @@ const AdminDashboard: React.FC = () => {
                                                 value={q.correctAnswer || ''} 
                                                 onChange={(e) => updateQuizQ(qIdx, 'correctAnswer', e.target.value)}
                                                 placeholder="Main Correct Answer" 
-                                                className="w-full p-2 text-sm border border-green-300 rounded bg-green-50 dark:bg-green-900/10"
+                                                className="w-full p-2 text-sm border border-green-300 rounded bg-green-50 dark:bg-green-900/10 text-gray-900 dark:text-gray-100"
                                             />
                                             <div className="text-xs text-gray-500">Accepted Variations:</div>
                                             <input 
                                                 value={q.acceptedAnswers?.join(', ') || ''}
                                                 onChange={(e) => updateQuizQ(qIdx, 'acceptedAnswers', e.target.value.split(',').map(s => s.trim()))}
                                                 placeholder="e.g. paris, Paris, City of Lights"
-                                                className="w-full p-2 text-xs border rounded bg-gray-50"
+                                                className="w-full p-2 text-xs border rounded bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100"
                                             />
                                         </div>
                                     ) : (

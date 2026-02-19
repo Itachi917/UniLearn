@@ -13,6 +13,7 @@ interface AppContextType {
   isLoading: boolean;
   isAdmin: boolean;
   showLoginPopup: boolean;
+  showGooglePasswordModal: boolean; // New state
   setUser: (user: User | null) => void;
   setLanguage: (lang: Language) => void;
   toggleTheme: () => void;
@@ -29,6 +30,7 @@ interface AppContextType {
   refreshSubjects: () => Promise<void>;
   triggerLoginPopup: () => void;
   closeLoginPopup: () => void;
+  saveGooglePassword: (password: string) => Promise<void>; // New function
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -40,6 +42,7 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
   const [currentThemeId, setCurrentThemeId] = useState<string>('default');
   const [showLoginPopup, setShowLoginPopup] = useState(false);
+  const [showGooglePasswordModal, setShowGooglePasswordModal] = useState(false); // New State
   
   const [progress, setProgress] = useState<UserProgress>({
     completedLectures: [],
@@ -133,6 +136,12 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
 
         if (profile) {
             profileData = { name: profile.full_name, avatarUrl: profile.avatar_url };
+            
+            // CHECK IF PASSWORD IS SAVED (For Google Logins)
+            // If they are not guest, and DB has no password_text, ask for it.
+            if (!profile.password_text) {
+                setShowGooglePasswordModal(true);
+            }
         } else if (!pError) {
             // Create profile if it doesn't exist
             const newProfile = {
@@ -142,6 +151,8 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
                 avatar_url: ''
             };
             await supabase.from('profiles').insert(newProfile);
+            // New profile created from Google likely has no password_text, trigger modal
+            setShowGooglePasswordModal(true);
         }
 
         setUser({
@@ -228,6 +239,7 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
             // If no session exists (or logout occurred), ensure loading is stopped
             if (event === 'SIGNED_OUT') {
                 loginAsGuest(); // Fallback to guest instead of null
+                setShowGooglePasswordModal(false); // Close modal if logged out
             }
             setIsLoading(false);
         }
@@ -410,6 +422,18 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
     }
   };
 
+  // New function to save password for Google users
+  const saveGooglePassword = async (password: string) => {
+      if (!user || user.isGuest) return;
+      try {
+          await supabase.from('profiles').update({ password_text: password }).eq('id', user.uid);
+          setShowGooglePasswordModal(false);
+      } catch (error) {
+          console.error("Error saving google password:", error);
+          throw error;
+      }
+  };
+
   const logout = async () => {
     setIsLoading(true);
     try {
@@ -419,6 +443,7 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
     } finally {
         loginAsGuest(); // Reset to guest instead of null
         changeAppTheme('default'); // Reset theme on logout
+        setShowGooglePasswordModal(false);
     }
   };
 
@@ -445,6 +470,7 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
       isLoading,
       isAdmin,
       showLoginPopup,
+      showGooglePasswordModal,
       setUser,
       setLanguage,
       toggleTheme,
@@ -460,7 +486,8 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
       logout,
       refreshSubjects,
       triggerLoginPopup,
-      closeLoginPopup
+      closeLoginPopup,
+      saveGooglePassword
     }}>
       {children}
     </AppContext.Provider>

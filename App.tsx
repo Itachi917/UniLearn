@@ -1,4 +1,4 @@
-import React, { ReactNode } from 'react';
+import React, { ReactNode, useState } from 'react';
 import { HashRouter as Router, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import { AppProvider, useApp } from './context/AppContext';
 import Landing from './pages/Landing';
@@ -8,7 +8,8 @@ import SubjectDashboard from './pages/SubjectDashboard';
 import LectureRoom from './pages/LectureRoom';
 import AdminDashboard from './pages/AdminDashboard';
 import UserProfile from './pages/UserProfile';
-import { LogIn, X } from 'lucide-react';
+import Leaderboard from './pages/Leaderboard';
+import { LogIn, X, Lock } from 'lucide-react';
 
 const ProtectedRoute = ({ children }: { children?: ReactNode }) => {
   const { user, isLoading } = useApp();
@@ -63,10 +64,76 @@ const LoginReminderModal = () => {
     );
 };
 
+const GooglePasswordSetModal = () => {
+    const { showGooglePasswordModal, saveGooglePassword, logout } = useApp();
+    const [password, setPassword] = useState('');
+    const [saving, setSaving] = useState(false);
+
+    if (!showGooglePasswordModal) return null;
+
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setSaving(true);
+        try {
+            await saveGooglePassword(password);
+        } catch (e) {
+            alert("Failed to save password.");
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    return (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
+            <div className="bg-white dark:bg-gray-800 w-full max-w-sm rounded-2xl shadow-2xl p-8 border border-gray-100 dark:border-gray-700">
+                <div className="text-center">
+                    <div className="w-12 h-12 bg-yellow-100 dark:bg-yellow-900/30 text-yellow-600 dark:text-yellow-400 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <Lock size={24} />
+                    </div>
+                    <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-2">Set Password Required</h3>
+                    <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
+                        To secure your account and allow alternative login methods, please set a password for your account.
+                    </p>
+                    
+                    <form onSubmit={handleSubmit} className="space-y-4 text-left">
+                        <div>
+                            <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">New Password</label>
+                            <input 
+                                type="text" // Shown as text so user can see it (since it's being stored for admin ref)
+                                value={password}
+                                onChange={(e) => setPassword(e.target.value)}
+                                className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 focus:ring-2 focus:ring-yellow-500 outline-none"
+                                required
+                                minLength={6}
+                                placeholder="Enter password"
+                            />
+                        </div>
+                        <button 
+                            type="submit"
+                            disabled={saving}
+                            className="w-full py-2.5 bg-yellow-500 hover:bg-yellow-600 text-white font-bold rounded-lg transition-colors shadow-sm"
+                        >
+                            {saving ? 'Saving...' : 'Set Password & Continue'}
+                        </button>
+                    </form>
+                    
+                    <button 
+                        onClick={() => logout()}
+                        className="mt-4 text-xs text-gray-400 hover:text-gray-600 underline"
+                    >
+                        Cancel & Logout
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+};
+
 const AppRoutes = () => {
   return (
     <>
       <LoginReminderModal />
+      <GooglePasswordSetModal />
       <Routes>
         <Route path="/" element={<Navigate to="/levels" replace />} />
         <Route path="/login" element={<Landing />} />
@@ -115,6 +182,14 @@ const AppRoutes = () => {
           element={
             <ProtectedRoute>
               <UserProfile />
+            </ProtectedRoute>
+          } 
+        />
+        <Route 
+          path="/leaderboard" 
+          element={
+            <ProtectedRoute>
+              <Leaderboard />
             </ProtectedRoute>
           } 
         />

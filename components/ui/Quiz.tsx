@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { QuizQuestion } from '../../types';
 import { useApp } from '../../context/AppContext';
-import { CheckCircle, XCircle, Timer, Clock, Play, HelpCircle } from 'lucide-react';
+import { CheckCircle, XCircle, Timer, Clock, Play, HelpCircle, SkipForward } from 'lucide-react';
 import { gradeShortAnswer } from '../../utils/grading';
 
 interface Props {
@@ -88,6 +88,19 @@ const Quiz: React.FC<Props> = ({ questions, onComplete }) => {
         setShortAnswerResult(result);
     }
     
+    setIsSubmitted(true);
+  };
+
+  const handleSkip = () => {
+    const question = questions[currentQIndex];
+    
+    if (question.type === 'SHORT') {
+        // Mark as incorrect and show result
+        setShortAnswerResult({ correct: false, score: 0 });
+    }
+    
+    // For MCQ, we just don't select anything (or keep current selection) 
+    // and setSubmitted to true. The UI will show the correct answer.
     setIsSubmitted(true);
   };
 
@@ -265,7 +278,7 @@ const Quiz: React.FC<Props> = ({ questions, onComplete }) => {
                             </div>
                             {!shortAnswerResult?.correct && (
                                 <p className="text-sm mt-1">
-                                    <span className="font-semibold">Expected:</span> {question.correctAnswer}
+                                    <span className="font-semibold">Expected:</span> {question.correctAnswer || question.acceptedAnswers?.[0] || "No answer provided"}
                                 </p>
                             )}
                         </div>
@@ -274,15 +287,23 @@ const Quiz: React.FC<Props> = ({ questions, onComplete }) => {
             )}
           </div>
 
-          <div className="mt-8 flex justify-end">
+          <div className="mt-8 flex justify-end gap-3">
             {!isSubmitted ? (
-              <button
-                onClick={handleSubmit}
-                disabled={isMCQ ? selectedOption === null : !textAnswer.trim()}
-                className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-              >
-                {t('submit')}
-              </button>
+              <>
+                  <button
+                    onClick={handleSkip}
+                    className="px-6 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-200 font-medium rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors flex items-center gap-2"
+                  >
+                    Skip <SkipForward size={16} />
+                  </button>
+                  <button
+                    onClick={handleSubmit}
+                    disabled={isMCQ ? selectedOption === null : !textAnswer.trim()}
+                    className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  >
+                    {t('submit')}
+                  </button>
+              </>
             ) : (
               <button
                 onClick={handleNext}

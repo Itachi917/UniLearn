@@ -238,6 +238,7 @@ const SubjectCatalog: React.FC = () => {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {filteredSubjects.map(subject => {
                 const percentage = getSubjectProgress(subject);
+                const hasContent = subject.lectures.length > 0;
                 
                 // Dynamic Color Mapping for Tailwind (safelist approach simulation)
                 const colorMap: Record<string, string> = {
@@ -259,14 +260,21 @@ const SubjectCatalog: React.FC = () => {
                 return (
                     <Link 
                         key={subject.id} 
-                        to={`/subject/${subject.id}`}
-                        className="group bg-card dark:bg-gray-800 rounded-2xl p-6 shadow-sm border border-gray-200 dark:border-gray-700 hover:shadow-lg transition-all duration-300 flex flex-col justify-between"
+                        to={hasContent ? `/subject/${subject.id}` : '#'}
+                        onClick={(e) => !hasContent && e.preventDefault()}
+                        className={`group bg-card dark:bg-gray-800 rounded-2xl p-6 shadow-sm border border-gray-200 dark:border-gray-700 transition-all duration-300 flex flex-col justify-between relative overflow-hidden ${hasContent ? 'hover:shadow-lg cursor-pointer' : 'opacity-80 cursor-default'}`}
                     >
+                        {!hasContent && (
+                            <div className="absolute top-0 right-0 bg-gray-500 text-white text-xs font-bold px-3 py-1 rounded-bl-xl z-10 shadow-sm">
+                                {language === 'ar' ? 'قريبا' : 'Coming Soon'}
+                            </div>
+                        )}
+
                         <div className="flex items-start justify-between mb-6">
                             <div className={`p-3 rounded-xl ${baseClasses} ${darkClasses}`}>
                                 <Book size={28} />
                             </div>
-                            {percentage > 0 && (
+                            {percentage > 0 && hasContent && (
                                 <div className="flex items-center gap-1.5 px-3 py-1 bg-gray-100 dark:bg-gray-700 rounded-full text-xs font-semibold">
                                     <BarChart3 size={14} className="text-green-500" />
                                     <span>{percentage}%</span>
@@ -275,7 +283,7 @@ const SubjectCatalog: React.FC = () => {
                         </div>
 
                         <div>
-                            <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
+                            <h3 className={`text-xl font-bold text-gray-900 dark:text-white mb-2 transition-colors ${hasContent ? 'group-hover:text-blue-600 dark:group-hover:text-blue-400' : ''}`}>
                                 {language === 'ar' ? subject.titleAr : subject.title}
                             </h3>
                             <div className="flex justify-between items-end">
@@ -289,7 +297,7 @@ const SubjectCatalog: React.FC = () => {
                         </div>
 
                         {/* Progress Bar Visual */}
-                        {percentage > 0 && (
+                        {percentage > 0 && hasContent && (
                             <div className="mt-6 w-full h-1.5 bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden">
                                 <div 
                                     className="h-full bg-green-500 rounded-full transition-all duration-500"
