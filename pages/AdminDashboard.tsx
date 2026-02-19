@@ -521,7 +521,7 @@ const AdminDashboard: React.FC = () => {
           target = 'LECTURE'; 
       }
 
-      await generateContentWithAI("Generate content based on this uploaded file.", imagePart, target, linkedLectureId);
+      await generateContentWithAI("Analyze the uploaded file content thoroughly. Extract all key concepts, definitions, and details to generate the requested JSON content. Ensure the output is comprehensive and directly derived from the file material.", imagePart, target, linkedLectureId);
       setPendingFile(null);
   };
 
@@ -877,6 +877,67 @@ const AdminDashboard: React.FC = () => {
                                 </div>
                             </div>
                         ))}
+                    </div>
+                </div>
+            )}
+
+            {/* File Upload Context Modal */}
+            {isFileContextModalOpen && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+                    <div className="bg-white dark:bg-gray-800 w-full max-w-md rounded-2xl shadow-xl p-6 relative">
+                        <h3 className="text-lg font-bold mb-4">Select Content Context</h3>
+                        <p className="text-sm text-gray-500 mb-6">
+                            Where should the content generated from this file be added?
+                        </p>
+                        
+                        <div className="space-y-4 mb-6">
+                            <label className="flex items-center gap-3 p-3 border rounded-lg cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700">
+                                <input 
+                                    type="radio" 
+                                    name="fileContext" 
+                                    value="" 
+                                    checked={selectedFileContextId === ''}
+                                    onChange={() => setSelectedFileContextId('')}
+                                    className="text-blue-600 focus:ring-blue-500"
+                                />
+                                <div>
+                                    <span className="block font-medium">General Subject Bank</span>
+                                    <span className="text-xs text-gray-500">Questions will be added to the subject's question bank.</span>
+                                </div>
+                            </label>
+
+                            <div className="space-y-2">
+                                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Or Link to Specific Lecture:</p>
+                                {subjects[activeSubjectIdx].lectures.map(lec => (
+                                    <label key={lec.id} className="flex items-center gap-3 p-3 border rounded-lg cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700">
+                                        <input 
+                                            type="radio" 
+                                            name="fileContext" 
+                                            value={lec.id}
+                                            checked={selectedFileContextId === lec.id}
+                                            onChange={() => setSelectedFileContextId(lec.id)}
+                                            className="text-blue-600 focus:ring-blue-500"
+                                        />
+                                        <span className="font-medium text-sm">{lec.title}</span>
+                                    </label>
+                                ))}
+                            </div>
+                        </div>
+
+                        <div className="flex gap-2">
+                            <button 
+                                onClick={() => { setIsFileContextModalOpen(false); setPendingFile(null); }}
+                                className="flex-1 py-2 bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 rounded-lg text-sm font-medium"
+                            >
+                                Cancel
+                            </button>
+                            <button 
+                                onClick={confirmFileUploadGeneration}
+                                className="flex-1 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-bold"
+                            >
+                                Generate
+                            </button>
+                        </div>
                     </div>
                 </div>
             )}
