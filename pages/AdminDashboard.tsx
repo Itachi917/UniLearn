@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import Navbar from '../components/layout/Navbar';
 import { useApp } from '../context/AppContext';
 import { supabase } from '../lib/supabase';
-import { Save, Plus, Trash2, Edit, ArrowLeft, Layers, Book, BrainCircuit, Users, Database, FileJson, Check, X, AlertCircle, Sparkles, Wand2, MessageSquarePlus, UploadCloud, FileText, MessageSquare } from 'lucide-react';
+import { Save, Plus, Trash2, Edit, ArrowLeft, Layers, Book, BrainCircuit, Users, Database, FileJson, Check, X, AlertCircle, Sparkles, Wand2, MessageSquarePlus, UploadCloud, FileText, MessageSquare, Library } from 'lucide-react';
 import { Subject, Lecture, Flashcard, QuizQuestion, FlashcardSuggestion } from '../types';
 import { GoogleGenAI, Type } from '@google/genai';
 
@@ -33,6 +33,9 @@ const AdminDashboard: React.FC = () => {
 
   // File Upload State
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isFileContextModalOpen, setIsFileContextModalOpen] = useState(false);
+  const [pendingFile, setPendingFile] = useState<{ data: string; mimeType: string } | null>(null);
+  const [selectedFileContextId, setSelectedFileContextId] = useState<string>(''); // '' = general bank
 
   // JSON Edit State
   const [editMode, setEditMode] = useState<'VISUAL' | 'JSON'>('VISUAL');
@@ -45,6 +48,10 @@ const AdminDashboard: React.FC = () => {
   // Suggestions State
   const [suggestions, setSuggestions] = useState<FlashcardSuggestion[]>([]);
   const [loadingSuggestions, setLoadingSuggestions] = useState(false);
+
+  // Subject Question Bank State
+  const [isQuestionBankMode, setIsQuestionBankMode] = useState(false);
+
 
   useEffect(() => {
     if (contextSubjects) {
@@ -292,45 +299,52 @@ const AdminDashboard: React.FC = () => {
     return JSON.parse(result);
   };
 
-  const generateContentWithAI = async (promptContext: string, imagePart?: any) => {
-    const currentLecture = subjects[activeSubjectIdx].lectures[activeLectureIdx];
-    if (!currentLecture.title && !promptContext) {
-        setMsg({ type: 'error', text: 'Please provide a lecture title first.' });
-        return;
-    }
+  const generateContentWithAI = async (promptContext: string, imagePart?: any, target: 'LECTURE' | 'BANK' = 'LECTURE', linkedLectureId?: string) => {
+    
+    let subjectTitle = subjects[activeSubjectIdx].title;
+    let lectureTitle = target === 'LECTURE' ? subjects[activeSubjectIdx].lectures[activeLectureIdx].title : "General Subject Knowledge";
 
     setGeneratingAI(true);
     setMsg({ type: 'info', text: 'AI is analyzing and generating content... This may take a moment due to the large volume of content.' });
 
     try {
         const ai = new GoogleGenAI({ apiKey: (process as any).env.API_KEY });
-        
-        // Use gemini-3-flash-preview for text tasks as it is generally more compliant with schemas and faster.
-        // Use gemini-2.5-flash-image for image tasks.
         const isImageModel = !!imagePart;
         const modelName = isImageModel ? 'gemini-2.5-flash-image' : 'gemini-3-flash-preview';
         
-        // Reduced counts to avoid truncation (15 flashcards, 10 quiz questions)
-        let systemPrompt = `Generate comprehensive, high-quality university-level lecture content.
-            The subject is "${subjects[activeSubjectIdx].title}".
-            Lecture Context: ${promptContext || currentLecture.title}
-            
-            Requirements:
-            1. Summary: Create a detailed summary in Markdown. Use headers, bold text, and bullet points.
-            2. Topics: List 5-8 key topics.
-            3. Flashcards: Generate 15 high-quality flashcards.
-            4. Quiz: Generate 10 multiple-choice questions with 4 options and the correctIndex.
-            
-            Output strictly valid JSON. No markdown code blocks (e.g. \`\`\`json). No intro/outro text.`;
+        let systemPrompt = "";
+
+        if (target === 'LECTURE') {
+             systemPrompt = `Generate comprehensive, high-quality university-level lecture content.
+                The subject is "${subjectTitle}".
+                Lecture Context: ${promptContext || lectureTitle}
+                
+                Requirements:
+                1. Summary: Create a detailed summary in Markdown. Use headers (#, ##), bullet points, and bold text for emphasis. Ensure it covers key concepts thoroughly.
+                2. Topics: List 5-8 key topics.
+                3. Flashcards: Generate at least 15 high-quality flashcards.
+                4. Quiz: Generate at least 10 questions. Mix Multiple Choice (MCQ) and Short Answer (SHORT) types.
+                   - For MCQ, provide 4 options and the correctIndex.
+                   - For SHORT, provide the main correctAnswer and a list of acceptedAnswers (variations, typos, synonyms).
+                
+                Output strictly valid JSON. No markdown code blocks.`;
+        } else {
+             systemPrompt = `Generate a robust question bank for the university subject: "${subjectTitle}".
+                Context: ${promptContext || "General comprehensive review"}
+                
+                Requirements:
+                1. Generate at least 20 high-quality questions.
+                2. Mix Multiple Choice (MCQ) and Short Answer (SHORT) types (~50/50 split).
+                3. Structure:
+                   - For MCQ: { "type": "MCQ", "question": "...", "options": ["..."], "correctIndex": 0 }
+                   - For SHORT: { "type": "SHORT", "question": "...", "correctAnswer": "Main Answer", "acceptedAnswers": ["Var1", "Var2"] }
+                
+                Output strictly valid JSON array of questions.`;
+        }
 
         if (isImageModel) {
-            systemPrompt += `\n\nStructure:
-            {
-                "summary": "string",
-                "topics": ["string"],
-                "flashcards": [{"question": "string", "answer": "string"}],
-                "quiz": [{"question": "string", "options": ["string"], "correctIndex": number}]
-            }`;
+             // Simplify schema hint for image model as it doesn't support responseSchema
+             systemPrompt += `\n\nReturn JSON only.`;
         }
 
         let contents: any;
@@ -351,38 +365,56 @@ const AdminDashboard: React.FC = () => {
         
         if (!isImageModel) {
             config.responseMimeType = "application/json";
-            config.responseSchema = {
-                type: Type.OBJECT,
-                properties: {
-                    summary: { type: Type.STRING },
-                    topics: { type: Type.ARRAY, items: { type: Type.STRING } },
-                    flashcards: {
-                        type: Type.ARRAY,
-                        items: {
-                            type: Type.OBJECT,
-                            properties: {
-                                question: { type: Type.STRING },
-                                answer: { type: Type.STRING }
-                            },
-                            required: ['question', 'answer']
+            
+            if (target === 'LECTURE') {
+                config.responseSchema = {
+                    type: Type.OBJECT,
+                    properties: {
+                        summary: { type: Type.STRING },
+                        topics: { type: Type.ARRAY, items: { type: Type.STRING } },
+                        flashcards: {
+                            type: Type.ARRAY,
+                            items: {
+                                type: Type.OBJECT,
+                                properties: { question: { type: Type.STRING }, answer: { type: Type.STRING } },
+                                required: ['question', 'answer']
+                            }
+                        },
+                        quiz: {
+                            type: Type.ARRAY,
+                            items: {
+                                type: Type.OBJECT,
+                                properties: {
+                                    type: { type: Type.STRING, enum: ["MCQ", "SHORT"] },
+                                    question: { type: Type.STRING },
+                                    options: { type: Type.ARRAY, items: { type: Type.STRING } },
+                                    correctIndex: { type: Type.INTEGER },
+                                    correctAnswer: { type: Type.STRING },
+                                    acceptedAnswers: { type: Type.ARRAY, items: { type: Type.STRING } }
+                                },
+                                required: ['type', 'question']
+                            }
                         }
                     },
-                    quiz: {
-                        type: Type.ARRAY,
-                        items: {
-                            type: Type.OBJECT,
-                            properties: {
-                                question: { type: Type.STRING },
-                                options: { type: Type.ARRAY, items: { type: Type.STRING } },
-                                correctIndex: { type: Type.INTEGER }
-                            },
-                            required: ['question', 'options', 'correctIndex']
-                        }
+                    required: ['summary', 'topics', 'flashcards', 'quiz']
+                };
+            } else {
+                 config.responseSchema = {
+                    type: Type.ARRAY,
+                    items: {
+                        type: Type.OBJECT,
+                        properties: {
+                            type: { type: Type.STRING, enum: ["MCQ", "SHORT"] },
+                            question: { type: Type.STRING },
+                            options: { type: Type.ARRAY, items: { type: Type.STRING } },
+                            correctIndex: { type: Type.INTEGER },
+                            correctAnswer: { type: Type.STRING },
+                            acceptedAnswers: { type: Type.ARRAY, items: { type: Type.STRING } }
+                        },
+                        required: ['type', 'question']
                     }
-                },
-                required: ['summary', 'topics', 'flashcards', 'quiz'],
-                propertyOrdering: ["summary", "topics", "flashcards", "quiz"]
-            };
+                };
+            }
         }
 
         const response = await ai.models.generateContent({
@@ -391,64 +423,48 @@ const AdminDashboard: React.FC = () => {
             config: config
         });
 
-        let text = response.text || "{}";
-        
-        // Improved JSON Extraction
-        const extractJSON = (str: string) => {
-            // 1. Try to find markdown block
-            const jsonBlockRegex = /```json\s*([\s\S]*?)\s*```/;
-            const match = str.match(jsonBlockRegex);
-            if (match) return match[1];
-
-            // 2. Try generic block
-            const genericBlockRegex = /```\s*([\s\S]*?)\s*```/;
-            const match2 = str.match(genericBlockRegex);
-            if (match2) return match2[1];
-
-            // 3. Find first {
-            const start = str.indexOf('{');
-            if (start !== -1) return str.substring(start);
-            
-            return str;
-        };
-
-        const cleanedText = extractJSON(text);
+        const text = response.text || "{}";
+        const cleanedText = text.replace(/```json\s*|```/g, '').trim();
 
         let data;
         try {
-            // Try standard parse first
             data = JSON.parse(cleanedText);
         } catch (parseErr: any) {
             console.warn("Standard JSON parse failed, attempting robust repair...", parseErr.message);
-            
-            try {
-                // Attempt robust repair using state machine
-                data = repairAndParseJSON(cleanedText);
-                setMsg({ type: 'info', text: 'Note: AI response was repaired. Some content might be missing.' });
-            } catch (repairErr: any) {
-                 console.error("All parse attempts failed.");
-                 console.log("Failed Text Snippet:", cleanedText.substring(0, 500) + "...");
-                 throw new Error(`Failed to parse AI response. Error: ${parseErr.message}`);
-            }
+            data = repairAndParseJSON(cleanedText);
         }
         
         const newSubs = [...subjects];
-        const updatedLecture = {
-            ...newSubs[activeSubjectIdx].lectures[activeLectureIdx],
-            summary: data.summary,
-            topics: data.topics,
-            flashcards: data.flashcards,
-            quiz: data.quiz.map((q: any, i: number) => ({ 
-                ...q, 
-                id: Date.now() + i
-            }))
-        };
-        newSubs[activeSubjectIdx].lectures[activeLectureIdx] = updatedLecture;
+        
+        if (target === 'LECTURE') {
+            const updatedLecture = {
+                ...newSubs[activeSubjectIdx].lectures[activeLectureIdx],
+                summary: data.summary,
+                topics: data.topics,
+                flashcards: data.flashcards,
+                quiz: data.quiz.map((q: any, i: number) => ({ ...q, id: Date.now() + i }))
+            };
+            newSubs[activeSubjectIdx].lectures[activeLectureIdx] = updatedLecture;
+            setMsg({ type: 'success', text: 'Lecture content generated successfully!' });
+        } else {
+            // Bank Generation
+            const newQuestions = Array.isArray(data) ? data : [];
+            const timestamp = Date.now();
+            const questionsWithIds = newQuestions.map((q: any, i: number) => ({
+                ...q,
+                id: timestamp + i,
+                lectureId: linkedLectureId || undefined 
+            }));
+            
+            const currentBank = newSubs[activeSubjectIdx].questionBank || [];
+            newSubs[activeSubjectIdx].questionBank = [...currentBank, ...questionsWithIds];
+            const addedCount = newQuestions.length;
+            const targetName = linkedLectureId ? subjects[activeSubjectIdx].lectures.find(l => l.id === linkedLectureId)?.title : 'Subject Bank';
+            setMsg({ type: 'success', text: `Added ${addedCount} questions linked to ${targetName}.` });
+        }
         
         setSubjects(newSubs);
-        if (!msg) { // Don't overwrite info msg if set during repair
-            setMsg({ type: 'success', text: `AI generated content successfully! (${data.flashcards?.length || 0} cards, ${data.quiz?.length || 0} questions)` });
-        }
+
     } catch (err: any) {
         console.error("AI Generation Error:", err);
         setMsg({ type: 'error', text: 'AI Generation failed: ' + err.message });
@@ -457,11 +473,11 @@ const AdminDashboard: React.FC = () => {
     }
   };
 
-  const handleAIContentGen = () => generateContentWithAI("");
+  const handleAIContentGen = () => generateContentWithAI("", undefined, isQuestionBankMode ? 'BANK' : 'LECTURE');
 
   const handleAIContentGenFromTopic = () => {
-    const topic = window.prompt("Enter a specific topic or focus for this lecture content:");
-    if (topic) generateContentWithAI(topic);
+    const topic = window.prompt("Enter a specific topic or focus:");
+    if (topic) generateContentWithAI(topic, undefined, isQuestionBankMode ? 'BANK' : 'LECTURE');
   };
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -469,23 +485,44 @@ const AdminDashboard: React.FC = () => {
       if (!file) return;
 
       const reader = new FileReader();
-      reader.onload = async (event) => {
+      reader.onload = (event) => {
           const base64Data = (event.target?.result as string).split(',')[1];
           const mimeType = file.type;
           
-          // Construct image part
-          const imagePart = {
-              inlineData: {
-                  data: base64Data,
-                  mimeType: mimeType
-              }
-          };
-          
-          await generateContentWithAI("Generate content based on this uploaded file.", imagePart);
+          setPendingFile({ data: base64Data, mimeType });
+          setIsFileContextModalOpen(true);
       };
       reader.readAsDataURL(file);
-      // Reset input
-      e.target.value = '';
+      e.target.value = ''; // Reset input
+  };
+
+  const confirmFileUploadGeneration = async () => {
+      if (!pendingFile) return;
+      setIsFileContextModalOpen(false);
+      
+      const imagePart = {
+          inlineData: {
+              data: pendingFile.data,
+              mimeType: pendingFile.mimeType
+          }
+      };
+      
+      // Determine target and linkage
+      // If we are in LECTURE_EDIT mode, we default to that lecture context.
+      // If we are in Question Bank Mode, we check the selectedFileContextId.
+      let target: 'LECTURE' | 'BANK' = 'LECTURE';
+      let linkedLectureId: string | undefined = undefined;
+
+      if (isQuestionBankMode) {
+          target = 'BANK';
+          linkedLectureId = selectedFileContextId || undefined;
+      } else {
+          // If in lecture edit, target is implicitly the active lecture
+          target = 'LECTURE'; 
+      }
+
+      await generateContentWithAI("Generate content based on this uploaded file.", imagePart, target, linkedLectureId);
+      setPendingFile(null);
   };
 
   // --- HANDLERS ---
@@ -496,7 +533,8 @@ const AdminDashboard: React.FC = () => {
       titleAr: 'مادة جديدة',
       level: 'Level-2',
       color: 'blue',
-      lectures: []
+      lectures: [],
+      questionBank: []
     };
     setSubjects([...subjects, newSubject]);
   };
@@ -601,7 +639,7 @@ const AdminDashboard: React.FC = () => {
                     </div>
                     <div className="flex gap-2 mt-6">
                         <button 
-                            onClick={() => { setActiveSubjectIdx(idx); setView('SUBJECT_EDIT'); }}
+                            onClick={() => { setActiveSubjectIdx(idx); setView('SUBJECT_EDIT'); setIsQuestionBankMode(false); }}
                             className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-blue-50 text-blue-600 hover:bg-blue-100 dark:bg-blue-900/20 dark:text-blue-400 dark:hover:bg-blue-900/30 rounded-lg text-sm font-medium"
                         >
                             <Edit size={16} /> Edit
@@ -621,6 +659,44 @@ const AdminDashboard: React.FC = () => {
 
   const renderSubjectEdit = () => {
     const subject = subjects[activeSubjectIdx];
+
+    // Helper for Question Bank
+    const addBankQuestion = () => {
+        const newQ: QuizQuestion = { id: Date.now(), type: 'MCQ', question: '', options: ['', '', '', ''], correctIndex: 0 };
+        const newSubs = [...subjects];
+        newSubs[activeSubjectIdx].questionBank = [...(newSubs[activeSubjectIdx].questionBank || []), newQ];
+        setSubjects(newSubs);
+    };
+
+    const updateBankQuestion = (idx: number, field: keyof QuizQuestion | 'option' | 'acceptedAnswer', val: any, subIdx?: number) => {
+        const bank = [...(subjects[activeSubjectIdx].questionBank || [])];
+        const q = { ...bank[idx] };
+
+        if (field === 'option' && typeof subIdx === 'number') {
+            const newOpts = [...(q.options || [])];
+            newOpts[subIdx] = val;
+            q.options = newOpts;
+        } else if (field === 'acceptedAnswer' && typeof subIdx === 'number') {
+            const newAcc = [...(q.acceptedAnswers || [])];
+            newAcc[subIdx] = val;
+            q.acceptedAnswers = newAcc;
+        } else {
+            // @ts-ignore
+            q[field] = val;
+        }
+        
+        bank[idx] = q;
+        const newSubs = [...subjects];
+        newSubs[activeSubjectIdx].questionBank = bank;
+        setSubjects(newSubs);
+    };
+
+    const deleteBankQuestion = (idx: number) => {
+        const newSubs = [...subjects];
+        newSubs[activeSubjectIdx].questionBank?.splice(idx, 1);
+        setSubjects(newSubs);
+    };
+
     return (
         <div className="space-y-8">
             <div className="flex items-center gap-4">
@@ -668,24 +744,142 @@ const AdminDashboard: React.FC = () => {
                     </div>
                 </div>
             </div>
-
-            <div>
-                <div className="flex justify-between items-center mb-4">
-                    <h3 className="text-lg font-semibold flex items-center gap-2"><Layers size={20} /> Lectures</h3>
-                    <button onClick={handleAddLecture} className="text-sm flex items-center gap-1 px-3 py-1.5 bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 rounded-lg hover:bg-blue-200"><Plus size={16} /> Add Lecture</button>
-                </div>
-                <div className="space-y-3">
-                    {subject.lectures.map((lec, idx) => (
-                        <div key={lec.id} className="flex items-center justify-between p-4 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg">
-                            <span className="font-medium text-gray-900 dark:text-white">{lec.title}</span>
-                            <div className="flex gap-2">
-                                <button onClick={() => { setActiveLectureIdx(idx); setEditMode('VISUAL'); setView('LECTURE_EDIT'); }} className="p-2 text-blue-600 bg-blue-50 dark:bg-blue-900/20 rounded"><Edit size={16} /></button>
-                                <button onClick={() => handleDeleteLecture(idx)} className="p-2 text-red-500 bg-red-50 dark:bg-red-900/20 rounded"><Trash2 size={16} /></button>
-                            </div>
-                        </div>
-                    ))}
-                </div>
+            
+            <div className="flex border-b border-gray-200 dark:border-gray-700">
+                <button 
+                    onClick={() => setIsQuestionBankMode(false)}
+                    className={`px-4 py-2 border-b-2 font-medium text-sm transition-colors ${!isQuestionBankMode ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500'}`}
+                >
+                    Lectures
+                </button>
+                <button 
+                    onClick={() => setIsQuestionBankMode(true)}
+                    className={`px-4 py-2 border-b-2 font-medium text-sm transition-colors ${isQuestionBankMode ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500'}`}
+                >
+                    Question Bank
+                </button>
             </div>
+
+            {isQuestionBankMode ? (
+                <div className="space-y-6">
+                    <div className="flex justify-between items-center">
+                        <div className="flex items-center gap-2">
+                            <h3 className="text-lg font-semibold flex items-center gap-2"><Library size={20} /> Subject Question Bank</h3>
+                            <span className="text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">{subject.questionBank?.length || 0} questions</span>
+                        </div>
+                        <div className="flex gap-2">
+                             <input 
+                                type="file" 
+                                ref={fileInputRef} 
+                                onChange={handleFileChange} 
+                                accept="image/*,application/pdf,text/*"
+                                className="hidden"
+                            />
+                            <button 
+                                onClick={handleAIContentGen}
+                                disabled={generatingAI}
+                                className="flex items-center gap-2 px-3 py-1.5 bg-purple-100 text-purple-700 rounded-lg hover:bg-purple-200"
+                            >
+                                <Wand2 size={16} /> AI Gen
+                            </button>
+                             <button 
+                                onClick={() => fileInputRef.current?.click()}
+                                disabled={generatingAI}
+                                className="flex items-center gap-2 px-3 py-1.5 bg-orange-100 text-orange-700 rounded-lg hover:bg-orange-200"
+                            >
+                                <UploadCloud size={16} /> AI File
+                            </button>
+                            <button onClick={addBankQuestion} className="text-sm flex items-center gap-1 px-3 py-1.5 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200">
+                                <Plus size={16} /> Add Question
+                            </button>
+                        </div>
+                    </div>
+
+                    <div className="space-y-4">
+                        {subject.questionBank?.map((q, qIdx) => (
+                            <div key={q.id || qIdx} className="p-4 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm relative">
+                                <div className="flex gap-2 mb-3 items-start">
+                                    <select 
+                                        value={q.type || 'MCQ'} 
+                                        onChange={(e) => updateBankQuestion(qIdx, 'type', e.target.value)}
+                                        className="p-2 text-xs border rounded bg-gray-50 dark:bg-gray-900 dark:border-gray-600"
+                                    >
+                                        <option value="MCQ">MCQ</option>
+                                        <option value="SHORT">Short Answer</option>
+                                    </select>
+                                    <div className="flex-1 space-y-1">
+                                        <input value={q.question} onChange={(e) => updateBankQuestion(qIdx, 'question', e.target.value)} placeholder="Question" className="w-full p-2 text-sm border rounded bg-gray-50 dark:bg-gray-900 dark:border-gray-600 font-medium" />
+                                        <select
+                                             value={q.lectureId || ""}
+                                             onChange={(e) => updateBankQuestion(qIdx, 'lectureId', e.target.value || undefined)}
+                                             className="w-full p-1 text-xs border rounded text-gray-500 bg-transparent"
+                                        >
+                                            <option value="">General Subject Question</option>
+                                            {subject.lectures.map(l => (
+                                                <option key={l.id} value={l.id}>Link to: {l.title}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                    <button onClick={() => deleteBankQuestion(qIdx)} className="text-red-400 hover:text-red-600 p-1"><Trash2 size={16} /></button>
+                                </div>
+                                
+                                {q.type === 'SHORT' ? (
+                                    <div className="space-y-2 pl-2 border-l-2 border-purple-200">
+                                        <input 
+                                            value={q.correctAnswer || ''} 
+                                            onChange={(e) => updateBankQuestion(qIdx, 'correctAnswer', e.target.value)}
+                                            placeholder="Main Correct Answer" 
+                                            className="w-full p-2 text-sm border border-green-300 rounded bg-green-50 dark:bg-green-900/10"
+                                        />
+                                        <div className="text-xs text-gray-500">Accepted Variations (comma separated for display, handled as array):</div>
+                                        <input 
+                                            value={q.acceptedAnswers?.join(', ') || ''}
+                                            onChange={(e) => updateBankQuestion(qIdx, 'acceptedAnswers', e.target.value.split(',').map(s => s.trim()))}
+                                            placeholder="e.g. paris, Paris, City of Lights"
+                                            className="w-full p-2 text-xs border rounded bg-gray-50"
+                                        />
+                                    </div>
+                                ) : (
+                                    <div className="grid grid-cols-2 gap-2 mb-3">
+                                        {q.options?.map((opt, oIdx) => (
+                                            <div key={oIdx} className="relative">
+                                                <input 
+                                                    value={opt} 
+                                                    onChange={(e) => updateBankQuestion(qIdx, 'option', e.target.value, oIdx)} 
+                                                    placeholder={`Option ${oIdx+1}`} 
+                                                    className={`w-full p-2 pl-8 text-sm border rounded bg-gray-50 dark:bg-gray-900 ${q.correctIndex === oIdx ? 'border-green-500 ring-1 ring-green-500' : 'dark:border-gray-600'}`} 
+                                                />
+                                                <button 
+                                                    onClick={() => updateBankQuestion(qIdx, 'correctIndex', oIdx)}
+                                                    className={`absolute left-2 top-2.5 w-4 h-4 rounded-full border ${q.correctIndex === oIdx ? 'bg-green-500 border-green-600' : 'bg-gray-100 dark:bg-gray-700 border-gray-300 dark:border-gray-500'}`}
+                                                />
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            ) : (
+                <div>
+                    <div className="flex justify-between items-center mb-4">
+                        <h3 className="text-lg font-semibold flex items-center gap-2"><Layers size={20} /> Lectures</h3>
+                        <button onClick={handleAddLecture} className="text-sm flex items-center gap-1 px-3 py-1.5 bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 rounded-lg hover:bg-blue-200"><Plus size={16} /> Add Lecture</button>
+                    </div>
+                    <div className="space-y-3">
+                        {subject.lectures.map((lec, idx) => (
+                            <div key={lec.id} className="flex items-center justify-between p-4 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg">
+                                <span className="font-medium text-gray-900 dark:text-white">{lec.title}</span>
+                                <div className="flex gap-2">
+                                    <button onClick={() => { setActiveLectureIdx(idx); setEditMode('VISUAL'); setView('LECTURE_EDIT'); }} className="p-2 text-blue-600 bg-blue-50 dark:bg-blue-900/20 rounded"><Edit size={16} /></button>
+                                    <button onClick={() => handleDeleteLecture(idx)} className="p-2 text-red-500 bg-red-50 dark:bg-red-900/20 rounded"><Trash2 size={16} /></button>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
         </div>
     );
   };
@@ -737,13 +931,17 @@ const AdminDashboard: React.FC = () => {
 
     const addQuizQ = () => {
         const quiz = lecture.quiz || [];
-        const newQ: QuizQuestion = { id: Date.now(), question: '', options: ['', '', '', ''], correctIndex: 0 };
+        const newQ: QuizQuestion = { id: Date.now(), type: 'MCQ', question: '', options: ['', '', '', ''], correctIndex: 0 };
         updateLecture('quiz', [...quiz, newQ]);
     };
-    const updateQuizQ = (idx: number, field: keyof QuizQuestion | 'option', val: any, optIdx?: number) => {
+    const updateQuizQ = (idx: number, field: keyof QuizQuestion | 'option' | 'acceptedAnswer', val: any, subIdx?: number) => {
         const quiz = [...(lecture.quiz || [])];
-        if (field === 'option' && typeof optIdx === 'number') {
-            quiz[idx].options[optIdx] = val;
+        if (field === 'option' && typeof subIdx === 'number') {
+            quiz[idx].options![subIdx] = val;
+        } else if (field === 'acceptedAnswer' && typeof subIdx === 'number') {
+            const acc = [...(quiz[idx].acceptedAnswers || [])];
+            acc[subIdx] = val;
+            quiz[idx].acceptedAnswers = acc;
         } else {
             // @ts-ignore
             quiz[idx][field] = val;
@@ -902,29 +1100,116 @@ const AdminDashboard: React.FC = () => {
                         <div className="space-y-4">
                             {lecture.quiz?.map((q, qIdx) => (
                                 <div key={q.id || qIdx} className="p-4 bg-gray-50 dark:bg-gray-900/50 rounded-lg border border-gray-100 dark:border-gray-700 group relative">
-                                    <div className="flex gap-2 mb-3">
+                                    <div className="flex gap-2 mb-3 items-center">
+                                        <select 
+                                            value={q.type || 'MCQ'} 
+                                            onChange={(e) => updateQuizQ(qIdx, 'type', e.target.value)}
+                                            className="p-2 text-xs border rounded bg-white dark:bg-gray-800 dark:border-gray-600"
+                                        >
+                                            <option value="MCQ">MCQ</option>
+                                            <option value="SHORT">Short</option>
+                                        </select>
                                         <input value={q.question} onChange={(e) => updateQuizQ(qIdx, 'question', e.target.value)} placeholder="Question" className="flex-1 p-2 text-sm border rounded bg-white dark:bg-gray-800 dark:border-gray-600 font-medium" />
                                         <button onClick={() => deleteQuizQ(qIdx)} className="text-red-400 hover:text-red-600 p-1"><Trash2 size={16} /></button>
                                     </div>
                                     
-                                    <div className="grid grid-cols-2 gap-2 mb-3">
-                                        {q.options?.map((opt, oIdx) => (
-                                            <div key={oIdx} className="relative">
-                                                <input 
-                                                    value={opt} 
-                                                    onChange={(e) => updateQuizQ(qIdx, 'option', e.target.value, oIdx)} 
-                                                    placeholder={`Option ${oIdx+1}`} 
-                                                    className={`w-full p-2 pl-8 text-sm border rounded bg-white dark:bg-gray-800 ${q.correctIndex === oIdx ? 'border-green-500 ring-1 ring-green-500' : 'dark:border-gray-600'}`} 
-                                                />
-                                                <button 
-                                                    onClick={() => updateQuizQ(qIdx, 'correctIndex', oIdx)}
-                                                    className={`absolute left-2 top-2.5 w-4 h-4 rounded-full border ${q.correctIndex === oIdx ? 'bg-green-500 border-green-600' : 'bg-gray-100 dark:bg-gray-700 border-gray-300 dark:border-gray-500'}`}
-                                                />
-                                            </div>
-                                        ))}
-                                    </div>
+                                    {q.type === 'SHORT' ? (
+                                        <div className="space-y-2 pl-2 border-l-2 border-purple-200">
+                                            <input 
+                                                value={q.correctAnswer || ''} 
+                                                onChange={(e) => updateQuizQ(qIdx, 'correctAnswer', e.target.value)}
+                                                placeholder="Main Correct Answer" 
+                                                className="w-full p-2 text-sm border border-green-300 rounded bg-green-50 dark:bg-green-900/10"
+                                            />
+                                            <div className="text-xs text-gray-500">Accepted Variations:</div>
+                                            <input 
+                                                value={q.acceptedAnswers?.join(', ') || ''}
+                                                onChange={(e) => updateQuizQ(qIdx, 'acceptedAnswers', e.target.value.split(',').map(s => s.trim()))}
+                                                placeholder="e.g. paris, Paris, City of Lights"
+                                                className="w-full p-2 text-xs border rounded bg-gray-50"
+                                            />
+                                        </div>
+                                    ) : (
+                                        <div className="grid grid-cols-2 gap-2 mb-3">
+                                            {q.options?.map((opt, oIdx) => (
+                                                <div key={oIdx} className="relative">
+                                                    <input 
+                                                        value={opt} 
+                                                        onChange={(e) => updateQuizQ(qIdx, 'option', e.target.value, oIdx)} 
+                                                        placeholder={`Option ${oIdx+1}`} 
+                                                        className={`w-full p-2 pl-8 text-sm border rounded bg-white dark:bg-gray-800 ${q.correctIndex === oIdx ? 'border-green-500 ring-1 ring-green-500' : 'dark:border-gray-600'}`} 
+                                                    />
+                                                    <button 
+                                                        onClick={() => updateQuizQ(qIdx, 'correctIndex', oIdx)}
+                                                        className={`absolute left-2 top-2.5 w-4 h-4 rounded-full border ${q.correctIndex === oIdx ? 'bg-green-500 border-green-600' : 'bg-gray-100 dark:bg-gray-700 border-gray-300 dark:border-gray-500'}`}
+                                                    />
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
                                 </div>
                             ))}
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* File Upload Context Modal */}
+            {isFileContextModalOpen && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+                    <div className="bg-white dark:bg-gray-800 w-full max-w-md rounded-2xl shadow-xl p-6 relative">
+                        <h3 className="text-lg font-bold mb-4">Select Content Context</h3>
+                        <p className="text-sm text-gray-500 mb-6">
+                            Where should the content generated from this file be added?
+                        </p>
+                        
+                        <div className="space-y-4 mb-6">
+                            <label className="flex items-center gap-3 p-3 border rounded-lg cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700">
+                                <input 
+                                    type="radio" 
+                                    name="fileContext" 
+                                    value="" 
+                                    checked={selectedFileContextId === ''}
+                                    onChange={() => setSelectedFileContextId('')}
+                                    className="text-blue-600 focus:ring-blue-500"
+                                />
+                                <div>
+                                    <span className="block font-medium">General Subject Bank</span>
+                                    <span className="text-xs text-gray-500">Questions will be added to the subject's question bank.</span>
+                                </div>
+                            </label>
+
+                            <div className="space-y-2">
+                                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Or Link to Specific Lecture:</p>
+                                {subjects[activeSubjectIdx].lectures.map(lec => (
+                                    <label key={lec.id} className="flex items-center gap-3 p-3 border rounded-lg cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700">
+                                        <input 
+                                            type="radio" 
+                                            name="fileContext" 
+                                            value={lec.id}
+                                            checked={selectedFileContextId === lec.id}
+                                            onChange={() => setSelectedFileContextId(lec.id)}
+                                            className="text-blue-600 focus:ring-blue-500"
+                                        />
+                                        <span className="font-medium text-sm">{lec.title}</span>
+                                    </label>
+                                ))}
+                            </div>
+                        </div>
+
+                        <div className="flex gap-2">
+                            <button 
+                                onClick={() => { setIsFileContextModalOpen(false); setPendingFile(null); }}
+                                className="flex-1 py-2 bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 rounded-lg text-sm font-medium"
+                            >
+                                Cancel
+                            </button>
+                            <button 
+                                onClick={confirmFileUploadGeneration}
+                                className="flex-1 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-bold"
+                            >
+                                Generate
+                            </button>
                         </div>
                     </div>
                 </div>

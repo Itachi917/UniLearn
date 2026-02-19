@@ -12,6 +12,7 @@ interface AppContextType {
   subjects: Subject[];
   isLoading: boolean;
   isAdmin: boolean;
+  showLoginPopup: boolean;
   setUser: (user: User | null) => void;
   setLanguage: (lang: Language) => void;
   toggleTheme: () => void;
@@ -26,17 +27,19 @@ interface AppContextType {
   loginAsGuest: () => void;
   logout: () => void;
   refreshSubjects: () => Promise<void>;
+  triggerLoginPopup: () => void;
+  closeLoginPopup: () => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
-// Fix: Make children optional to resolve "children missing" errors in App.tsx usage
 export const AppProvider = ({ children }: { children?: ReactNode }) => {
   // State
   const [user, setUser] = useState<User | null>(null);
   const [language, setLanguage] = useState<Language>('en');
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
   const [currentThemeId, setCurrentThemeId] = useState<string>('default');
+  const [showLoginPopup, setShowLoginPopup] = useState(false);
   
   const [progress, setProgress] = useState<UserProgress>({
     completedLectures: [],
@@ -103,6 +106,20 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
       }
   };
 
+  const loginAsGuest = () => {
+    setUser({ uid: 'guest', email: null, isGuest: true, name: 'Guest Student' });
+    setProgress({ 
+        completedLectures: [], 
+        quizScores: {},
+        enrolledSubjectIds: SEED_DATA.map(s => s.id),
+        studyStreak: 1,
+        totalStudyMinutes: 0
+    });
+    // Ensure we have fresh subjects even if we just logged in as guest
+    refreshSubjects();
+    setIsLoading(false);
+  };
+
   const loadUserData = async (authUser: any) => {
     try {
         let profileData = { name: authUser.user_metadata?.name || 'Student', avatarUrl: '' };
@@ -115,7 +132,6 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
             .maybeSingle();
 
         if (profile) {
-            // Fix: Change avatar_url to avatarUrl to match the local variable structure defined on line 66
             profileData = { name: profile.full_name, avatarUrl: profile.avatar_url };
         } else if (!pError) {
             // Create profile if it doesn't exist
@@ -187,11 +203,12 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
         if (session?.user && mounted) {
           await loadUserData(session.user);
         } else {
-          // If no session, we still want to ensure we have the latest subjects for guests/login screen
-          refreshSubjects();
+          // If no session, automatically enter guest mode
+          loginAsGuest();
         }
       } catch (error) {
         console.error("Error checking session:", error);
+        loginAsGuest();
       } finally {
         if (mounted) setIsLoading(false);
       }
@@ -210,17 +227,13 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
         } else {
             // If no session exists (or logout occurred), ensure loading is stopped
             if (event === 'SIGNED_OUT') {
-                setUser(null);
-                setProgress({ completedLectures: [], quizScores: {} });
-                // Reset subjects to SEED initially, but then fetch fresh
-                setSubjects(SEED_DATA); 
-                refreshSubjects(); 
+                loginAsGuest(); // Fallback to guest instead of null
             }
             setIsLoading(false);
         }
     });
 
-    // Safeguard timeout: If anything takes more than 8 seconds, clear the loading state
+    // Safeguard timeout
     const timeoutId = setTimeout(() => {
         if (mounted && isLoading) {
             console.warn("Auth check timed out, clearing loading state manually");
@@ -309,6 +322,16 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
     }
   }, [language]);
 
+  const triggerLoginPopup = () => {
+      if (user?.isGuest) {
+          setShowLoginPopup(true);
+      }
+  };
+
+  const closeLoginPopup = () => {
+      setShowLoginPopup(false);
+  };
+
   const saveProgress = async (newProgress: UserProgress) => {
     setProgress(newProgress);
     if (user && !user.isGuest) {
@@ -387,20 +410,6 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
     }
   };
 
-  const loginAsGuest = () => {
-    setUser({ uid: 'guest', email: null, isGuest: true, name: 'Guest Student' });
-    setProgress({ 
-        completedLectures: [], 
-        quizScores: {},
-        enrolledSubjectIds: SEED_DATA.map(s => s.id),
-        studyStreak: 1,
-        totalStudyMinutes: 0
-    });
-    // Ensure we have fresh subjects even if we just logged in as guest
-    refreshSubjects();
-    setIsLoading(false);
-  };
-
   const logout = async () => {
     setIsLoading(true);
     try {
@@ -408,9 +417,7 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
             await supabase.auth.signOut();
         }
     } finally {
-        setUser(null);
-        setProgress({ completedLectures: [], quizScores: {} });
-        setIsLoading(false);
+        loginAsGuest(); // Reset to guest instead of null
         changeAppTheme('default'); // Reset theme on logout
     }
   };
@@ -437,6 +444,7 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
       subjects,
       isLoading,
       isAdmin,
+      showLoginPopup,
       setUser,
       setLanguage,
       toggleTheme,
@@ -450,7 +458,9 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
       t,
       loginAsGuest,
       logout,
-      refreshSubjects
+      refreshSubjects,
+      triggerLoginPopup,
+      closeLoginPopup
     }}>
       {children}
     </AppContext.Provider>
