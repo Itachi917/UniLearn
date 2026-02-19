@@ -2,9 +2,10 @@ import React, { useState, useEffect, useRef } from 'react';
 import Navbar from '../components/layout/Navbar';
 import { useApp } from '../context/AppContext';
 import { supabase } from '../lib/supabase';
-import { Save, Plus, Trash2, Edit, ArrowLeft, Layers, Book, BrainCircuit, Users, Database, FileJson, Check, X, AlertCircle, Sparkles, Wand2, MessageSquarePlus, UploadCloud, FileText, MessageSquare, Library } from 'lucide-react';
-import { Subject, Lecture, Flashcard, QuizQuestion, FlashcardSuggestion } from '../types';
+import { Save, Plus, Trash2, Edit, ArrowLeft, Layers, Book, BrainCircuit, Users, Database, FileJson, Check, X, AlertCircle, Sparkles, Wand2, MessageSquarePlus, UploadCloud, FileText, MessageSquare, Library, Image as ImageIcon, Video, Network } from 'lucide-react';
+import { Subject, Lecture, Flashcard, QuizQuestion, FlashcardSuggestion, LectureMedia, MediaType } from '../types';
 import { GoogleGenAI, Type } from '@google/genai';
+import MindMapRenderer from '../components/ui/MindMapRenderer';
 
 type ViewMode = 'SUBJECT_LIST' | 'SUBJECT_EDIT' | 'LECTURE_EDIT' | 'STUDENT_LIST' | 'SUGGESTIONS';
 
@@ -36,6 +37,10 @@ const AdminDashboard: React.FC = () => {
   const [isFileContextModalOpen, setIsFileContextModalOpen] = useState(false);
   const [pendingFile, setPendingFile] = useState<{ data: string; mimeType: string } | null>(null);
   const [selectedFileContextId, setSelectedFileContextId] = useState<string>(''); // '' = general bank
+
+  // Media Upload State
+  const mediaInputRef = useRef<HTMLInputElement>(null);
+  const [activeMediaType, setActiveMediaType] = useState<MediaType>('image');
 
   // JSON Edit State
   const [editMode, setEditMode] = useState<'VISUAL' | 'JSON'>('VISUAL');
@@ -496,6 +501,20 @@ const AdminDashboard: React.FC = () => {
       e.target.value = ''; // Reset input
   };
 
+  const handleMediaFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+
+      // Only handle image uploads here for now (Videos usually via URL to save DB space)
+      const reader = new FileReader();
+      reader.onload = (event) => {
+          const result = event.target?.result as string;
+          addMedia('image', file.name, undefined, result); // Use result as content (Base64)
+      };
+      reader.readAsDataURL(file);
+      e.target.value = '';
+  };
+
   const confirmFileUploadGeneration = async () => {
       if (!pendingFile) return;
       setIsFileContextModalOpen(false);
@@ -556,7 +575,8 @@ const AdminDashboard: React.FC = () => {
         summary: '',
         flashcards: [],
         quiz: [],
-        topics: []
+        topics: [],
+        media: []
     };
     const newSubs = [...subjects];
     newSubs[activeSubjectIdx].lectures.push(newLecture);
@@ -569,6 +589,39 @@ const AdminDashboard: React.FC = () => {
         newSubs[activeSubjectIdx].lectures.splice(lecIdx, 1);
         setSubjects(newSubs);
     }
+  };
+
+  const addMedia = (type: MediaType, title: string = 'New Media', url?: string, content?: string) => {
+      const newMedia: LectureMedia = {
+          id: `media-${Date.now()}`,
+          type,
+          title,
+          url,
+          content: content || (type === 'mindmap' ? '{"label": "Central Topic", "children": [{"label": "Branch 1"}]}' : undefined)
+      };
+      
+      const newSubs = [...subjects];
+      const lecture = newSubs[activeSubjectIdx].lectures[activeLectureIdx];
+      lecture.media = [...(lecture.media || []), newMedia];
+      setSubjects(newSubs);
+  };
+
+  const updateMedia = (idx: number, field: keyof LectureMedia, val: any) => {
+      const newSubs = [...subjects];
+      const media = [...(newSubs[activeSubjectIdx].lectures[activeLectureIdx].media || [])];
+      media[idx] = { ...media[idx], [field]: val };
+      newSubs[activeSubjectIdx].lectures[activeLectureIdx].media = media;
+      setSubjects(newSubs);
+  };
+
+  const deleteMedia = (idx: number) => {
+       if (window.confirm('Delete this media item?')) {
+            const newSubs = [...subjects];
+            const media = [...(newSubs[activeSubjectIdx].lectures[activeLectureIdx].media || [])];
+            media.splice(idx, 1);
+            newSubs[activeSubjectIdx].lectures[activeLectureIdx].media = media;
+            setSubjects(newSubs);
+       }
   };
 
   // --- RENDERERS ---
@@ -1130,6 +1183,110 @@ const AdminDashboard: React.FC = () => {
                                 <span>**Bold**</span>
                                 <span>*Italic*</span>
                             </div>
+                        </div>
+                    </div>
+
+                    {/* Media Management Section */}
+                    <div className="bg-white dark:bg-gray-800 p-6 rounded-xl border border-gray-200 dark:border-gray-700">
+                        <div className="flex justify-between items-center mb-4">
+                            <h3 className="font-semibold flex items-center gap-2 text-gray-900 dark:text-white"><Network size={18}/> Lecture Media</h3>
+                            <div className="flex items-center gap-2">
+                                <select 
+                                    value={activeMediaType} 
+                                    onChange={(e) => setActiveMediaType(e.target.value as MediaType)}
+                                    className="text-xs p-1.5 border rounded bg-white dark:bg-gray-700 dark:border-gray-600"
+                                >
+                                    <option value="image">Image</option>
+                                    <option value="video">Video</option>
+                                    <option value="mindmap">Mind Map (JSON)</option>
+                                </select>
+                                <button 
+                                    onClick={() => {
+                                        if (activeMediaType === 'image') mediaInputRef.current?.click();
+                                        else addMedia(activeMediaType, `New ${activeMediaType}`);
+                                    }} 
+                                    className="text-xs bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 px-3 py-1.5 rounded hover:bg-blue-100 transition-colors flex items-center gap-1"
+                                >
+                                    <Plus size={14} /> Add {activeMediaType === 'mindmap' ? 'Map' : activeMediaType.charAt(0).toUpperCase() + activeMediaType.slice(1)}
+                                </button>
+                                <input 
+                                    type="file" 
+                                    ref={mediaInputRef} 
+                                    onChange={handleMediaFileChange} 
+                                    accept="image/*"
+                                    className="hidden"
+                                />
+                            </div>
+                        </div>
+
+                        <div className="space-y-4">
+                            {!lecture.media || lecture.media.length === 0 ? (
+                                <p className="text-sm text-gray-400 italic">No media added yet.</p>
+                            ) : (
+                                lecture.media.map((item, idx) => (
+                                    <div key={item.id} className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 bg-gray-50 dark:bg-gray-900/50">
+                                        <div className="flex justify-between items-start mb-3">
+                                            <div className="flex items-center gap-2">
+                                                {item.type === 'video' ? <Video size={16} className="text-red-500" /> : item.type === 'image' ? <ImageIcon size={16} className="text-blue-500" /> : <Network size={16} className="text-purple-500" />}
+                                                <input 
+                                                    value={item.title} 
+                                                    onChange={(e) => updateMedia(idx, 'title', e.target.value)}
+                                                    className="font-medium bg-transparent border-b border-transparent focus:border-blue-500 outline-none text-sm w-40 sm:w-64"
+                                                    placeholder="Media Title"
+                                                />
+                                            </div>
+                                            <button onClick={() => deleteMedia(idx)} className="text-red-400 hover:text-red-600"><Trash2 size={16} /></button>
+                                        </div>
+
+                                        {item.type === 'video' && (
+                                            <div>
+                                                <input 
+                                                    value={item.url || ''} 
+                                                    onChange={(e) => updateMedia(idx, 'url', e.target.value)}
+                                                    placeholder="YouTube URL or Video Link"
+                                                    className="w-full p-2 text-xs border rounded bg-white dark:bg-gray-800 dark:border-gray-600 mb-2"
+                                                />
+                                                {item.url && (
+                                                    <div className="text-xs text-gray-500">Preview available in lecture room.</div>
+                                                )}
+                                            </div>
+                                        )}
+
+                                        {item.type === 'image' && (
+                                            <div className="flex gap-4 items-center">
+                                                {item.content ? (
+                                                    <img src={item.content} alt="preview" className="w-20 h-20 object-cover rounded border" />
+                                                ) : (
+                                                    <div className="w-20 h-20 bg-gray-200 rounded flex items-center justify-center text-xs text-gray-500">No Img</div>
+                                                )}
+                                                <div className="flex-1">
+                                                    <p className="text-xs text-gray-500 mb-2">Image stored as Base64.</p>
+                                                    {/* Option to re-upload could go here */}
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {item.type === 'mindmap' && (
+                                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                                                <div>
+                                                    <label className="block text-xs font-medium text-gray-500 mb-1">JSON Structure</label>
+                                                    <textarea 
+                                                        value={item.content} 
+                                                        onChange={(e) => updateMedia(idx, 'content', e.target.value)}
+                                                        className="w-full h-32 p-2 text-xs font-mono border rounded bg-white dark:bg-gray-800 dark:border-gray-600"
+                                                    />
+                                                </div>
+                                                <div className="border rounded bg-white dark:bg-gray-800 p-2 overflow-hidden h-32">
+                                                    <label className="block text-xs font-medium text-gray-500 mb-1">Preview</label>
+                                                    <div className="transform scale-50 origin-top-left w-[200%]">
+                                                        <MindMapRenderer data={item.content || '{}'} />
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                ))
+                            )}
                         </div>
                     </div>
 

@@ -1,3 +1,4 @@
+
 export type Language = 'en' | 'ar';
 
 export interface Flashcard {
@@ -19,6 +20,16 @@ export interface QuizQuestion {
   lectureId?: string; // To link specific questions to lectures within the subject bank
 }
 
+export type MediaType = 'video' | 'image' | 'mindmap';
+
+export interface LectureMedia {
+  id: string;
+  type: MediaType;
+  title: string;
+  url?: string; // For videos or external images
+  content?: string; // Base64 for images, or JSON string for mindmaps
+}
+
 export interface Lecture {
   id: string;
   title: string;
@@ -27,6 +38,7 @@ export interface Lecture {
   flashcards: Flashcard[];
   quiz?: QuizQuestion[];
   topics?: string[];
+  media?: LectureMedia[];
 }
 
 export interface Subject {

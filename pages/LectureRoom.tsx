@@ -2,16 +2,17 @@ import React, { useState, useEffect, useRef } from 'react';
 import Navbar from '../components/layout/Navbar';
 import { useApp } from '../context/AppContext';
 import { useParams, Link } from 'react-router-dom';
-import { FileText, Layers, BrainCircuit, ChevronRight, CheckCircle, ChevronLeft, Shuffle, Download, Printer, FileType, PlusCircle, X } from 'lucide-react';
+import { FileText, Layers, BrainCircuit, ChevronRight, CheckCircle, ChevronLeft, Shuffle, Download, Printer, FileType, PlusCircle, X, Network } from 'lucide-react';
 import Flashcard from '../components/ui/Flashcard';
 import Quiz from '../components/ui/Quiz';
 import ReactMarkdown from 'react-markdown';
-import { Flashcard as IFlashcard } from '../types';
+import { Flashcard as IFlashcard, MediaType } from '../types';
+import MindMapRenderer from '../components/ui/MindMapRenderer';
 
 const LectureRoom: React.FC = () => {
   const { subjectId, lectureId } = useParams<{ subjectId: string, lectureId: string }>();
   const { t, language, markLectureComplete, updateQuizScore, logStudyTime, progress, subjects, user, submitFlashcardSuggestion } = useApp();
-  const [activeTab, setActiveTab] = useState<'summary' | 'flashcards' | 'quiz'>('summary');
+  const [activeTab, setActiveTab] = useState<'summary' | 'flashcards' | 'quiz' | 'media'>('summary');
 
   const subject = subjects.find(s => s.id === subjectId);
   const lecture = subject?.lectures.find(l => l.id === lectureId);
@@ -137,9 +138,22 @@ const LectureRoom: React.FC = () => {
       }
   };
 
+  // Helper to extract Embed URL from various video link formats
+  const getEmbedUrl = (url: string) => {
+      if (!url) return '';
+      if (url.includes('youtube.com/watch?v=')) {
+          return url.replace('watch?v=', 'embed/');
+      } else if (url.includes('youtu.be/')) {
+          const id = url.split('/').pop();
+          return `https://www.youtube.com/embed/${id}`;
+      }
+      return url; // Direct MP4 or embedded
+  };
+
   const tabs = [
     { id: 'summary', icon: FileText, label: t('summary') },
     { id: 'flashcards', icon: Layers, label: t('flashcards') },
+    { id: 'media', icon: Network, label: 'Media' },
     { id: 'quiz', icon: BrainCircuit, label: t('quiz') },
   ] as const;
 
@@ -256,7 +270,7 @@ const LectureRoom: React.FC = () => {
             {tabs.map(tab => (
                 <button
                     key={tab.id}
-                    onClick={() => setActiveTab(tab.id)}
+                    onClick={() => setActiveTab(tab.id as any)}
                     className={`flex items-center gap-2 px-6 py-4 font-medium text-sm sm:text-base border-b-2 transition-colors whitespace-nowrap ${
                         activeTab === tab.id
                         ? 'border-blue-600 text-blue-600 dark:text-blue-400'
@@ -386,6 +400,64 @@ const LectureRoom: React.FC = () => {
                                 </button>
                             )}
                         </div>
+                    )}
+                </div>
+            )}
+
+            {/* Media Tab with Lazy Loading Logic */}
+            {activeTab === 'media' && (
+                <div className="max-w-4xl mx-auto space-y-8 animate-fade-in">
+                    {(!lecture.media || lecture.media.length === 0) ? (
+                         <div className="text-center py-12 text-gray-500 dark:text-gray-400 bg-card dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700">
+                            <Network size={48} className="mx-auto mb-4 opacity-50" />
+                            <p>No extra media resources available for this lecture.</p>
+                        </div>
+                    ) : (
+                        lecture.media.map(item => (
+                            <div key={item.id} className="bg-card dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 overflow-hidden shadow-sm">
+                                <div className="p-4 border-b border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50 flex items-center gap-3">
+                                    <span className="p-2 rounded-lg bg-white dark:bg-gray-800 shadow-sm text-blue-600 dark:text-blue-400">
+                                        {item.type === 'video' ? <Network size={20} /> : item.type === 'image' ? <FileType size={20} /> : <BrainCircuit size={20} />}
+                                    </span>
+                                    <h3 className="font-bold text-gray-900 dark:text-white">{item.title}</h3>
+                                </div>
+                                
+                                <div className="p-6 flex justify-center bg-gray-50/50 dark:bg-gray-900/20">
+                                    {/* Video Renderer */}
+                                    {item.type === 'video' && item.url && (
+                                        <div className="w-full aspect-video rounded-xl overflow-hidden shadow-lg bg-black">
+                                            <iframe 
+                                                src={getEmbedUrl(item.url)} 
+                                                title={item.title}
+                                                className="w-full h-full border-0"
+                                                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
+                                                allowFullScreen
+                                                loading="lazy" // Native lazy loading for iframes
+                                            />
+                                        </div>
+                                    )}
+
+                                    {/* Image Renderer */}
+                                    {item.type === 'image' && item.content && (
+                                        <div className="relative group">
+                                            <img 
+                                                src={item.content} 
+                                                alt={item.title} 
+                                                className="max-w-full max-h-[500px] rounded-xl shadow-md object-contain"
+                                                loading="lazy" // Native lazy loading for images
+                                            />
+                                        </div>
+                                    )}
+
+                                    {/* Mind Map Renderer */}
+                                    {item.type === 'mindmap' && item.content && (
+                                        <div className="w-full overflow-x-auto">
+                                            <MindMapRenderer data={item.content} />
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        ))
                     )}
                 </div>
             )}
