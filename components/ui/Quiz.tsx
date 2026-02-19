@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { QuizQuestion } from '../../types';
 import { useApp } from '../../context/AppContext';
-import { CheckCircle, XCircle, Timer, Clock, Play } from 'lucide-react';
+import { CheckCircle, XCircle, Timer, Clock, Play, HelpCircle } from 'lucide-react';
+import { gradeShortAnswer } from '../../utils/grading';
 
 interface Props {
   questions: QuizQuestion[];
@@ -9,7 +10,7 @@ interface Props {
 }
 
 const Quiz: React.FC<Props> = ({ questions, onComplete }) => {
-  const { t } = useApp();
+  const { t, triggerLoginPopup } = useApp();
   
   // Setup State
   const [hasStarted, setHasStarted] = useState(false);
@@ -18,12 +19,15 @@ const Quiz: React.FC<Props> = ({ questions, onComplete }) => {
 
   // Quiz State
   const [currentQIndex, setCurrentQIndex] = useState(0);
-  const [selectedOption, setSelectedOption] = useState<number | null>(null);
+  const [selectedOption, setSelectedOption] = useState<number | null>(null); // For MCQ
+  const [textAnswer, setTextAnswer] = useState(''); // For Short Answer
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [score, setScore] = useState(0);
   const [completed, setCompleted] = useState(false);
 
-  // Use ReturnType<typeof setInterval> to be environment-agnostic (works for number or NodeJS.Timeout)
+  // Track if current answer is correct for UI feedback (Short Answer)
+  const [shortAnswerResult, setShortAnswerResult] = useState<{correct: boolean, score: number} | null>(null);
+
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
@@ -57,7 +61,9 @@ const Quiz: React.FC<Props> = ({ questions, onComplete }) => {
     setCompleted(true);
     
     // Calculate final score based on current progress
-    onComplete(score); 
+    onComplete(score);
+    // Suggest login if guest
+    triggerLoginPopup();
   };
 
   const formatTime = (seconds: number) => {
@@ -67,10 +73,20 @@ const Quiz: React.FC<Props> = ({ questions, onComplete }) => {
   };
 
   const handleSubmit = () => {
-    if (selectedOption === null) return;
-    
-    const isCorrect = selectedOption === questions[currentQIndex].correctIndex;
-    if (isCorrect) setScore(s => s + 1);
+    const question = questions[currentQIndex];
+
+    if (question.type === 'MCQ' || !question.type) { // Default to MCQ if type missing
+        if (selectedOption === null) return;
+        const isCorrect = selectedOption === question.correctIndex;
+        if (isCorrect) setScore(s => s + 1);
+    } else if (question.type === 'SHORT') {
+        if (!textAnswer.trim()) return;
+        const result = gradeShortAnswer(textAnswer, question.acceptedAnswers || [question.correctAnswer || '']);
+        if (result.correct) {
+            setScore(s => s + 1);
+        }
+        setShortAnswerResult(result);
+    }
     
     setIsSubmitted(true);
   };
@@ -79,6 +95,8 @@ const Quiz: React.FC<Props> = ({ questions, onComplete }) => {
     if (currentQIndex < questions.length - 1) {
       setCurrentQIndex(prev => prev + 1);
       setSelectedOption(null);
+      setTextAnswer('');
+      setShortAnswerResult(null);
       setIsSubmitted(false);
     } else {
       finishQuiz();
@@ -143,6 +161,8 @@ const Quiz: React.FC<Props> = ({ questions, onComplete }) => {
                   setCompleted(false);
                   setIsSubmitted(false);
                   setSelectedOption(null);
+                  setTextAnswer('');
+                  setShortAnswerResult(null);
                   setHasStarted(false); // Go back to setup
               }}
               className="mt-6 px-6 py-2 bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 rounded-lg transition-colors"
@@ -155,6 +175,7 @@ const Quiz: React.FC<Props> = ({ questions, onComplete }) => {
 
     // --- RENDER: ACTIVE QUIZ ---
     const question = questions[currentQIndex];
+    const isMCQ = question.type === 'MCQ' || !question.type;
 
     return (
       <div className="bg-card dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
@@ -181,50 +202,83 @@ const Quiz: React.FC<Props> = ({ questions, onComplete }) => {
         </div>
 
         <div className="p-6 sm:p-8">
-          <h3 className="text-xl sm:text-2xl font-bold mb-6 text-gray-900 dark:text-white">
-              {question.question}
-          </h3>
+          <div className="flex gap-3 mb-6">
+              <span className={`inline-flex items-center justify-center w-8 h-8 rounded-full text-xs font-bold ${isMCQ ? 'bg-blue-100 text-blue-600' : 'bg-purple-100 text-purple-600'}`}>
+                  {isMCQ ? 'MCQ' : 'SA'}
+              </span>
+              <h3 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white flex-1">
+                  {question.question}
+              </h3>
+          </div>
 
-          <div className="space-y-3">
-            {question.options.map((opt, idx) => {
-              let itemClass = "w-full text-left p-4 rounded-lg border-2 transition-all duration-200 flex justify-between items-center ";
-              
-              if (isSubmitted) {
-                  if (idx === question.correctIndex) {
-                      itemClass += "border-green-500 bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300";
-                  } else if (idx === selectedOption) {
-                      itemClass += "border-red-500 bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300";
-                  } else {
-                      itemClass += "border-gray-100 dark:border-gray-700 opacity-50";
-                  }
-              } else {
-                  if (selectedOption === idx) {
-                      itemClass += "border-blue-500 bg-blue-50 dark:bg-blue-900/20";
-                  } else {
-                      itemClass += "border-gray-200 dark:border-gray-700 hover:border-blue-300 dark:hover:border-blue-700";
-                  }
-              }
+          <div className="space-y-4">
+            {isMCQ ? (
+                // MCQ RENDER
+                question.options?.map((opt, idx) => {
+                    let itemClass = "w-full text-left p-4 rounded-lg border-2 transition-all duration-200 flex justify-between items-center ";
+                    
+                    if (isSubmitted) {
+                        if (idx === question.correctIndex) {
+                            itemClass += "border-green-500 bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300";
+                        } else if (idx === selectedOption) {
+                            itemClass += "border-red-500 bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300";
+                        } else {
+                            itemClass += "border-gray-100 dark:border-gray-700 opacity-50";
+                        }
+                    } else {
+                        if (selectedOption === idx) {
+                            itemClass += "border-blue-500 bg-blue-50 dark:bg-blue-900/20";
+                        } else {
+                            itemClass += "border-gray-200 dark:border-gray-700 hover:border-blue-300 dark:hover:border-blue-700";
+                        }
+                    }
 
-              return (
-                <button
-                  key={idx}
-                  onClick={() => !isSubmitted && setSelectedOption(idx)}
-                  disabled={isSubmitted}
-                  className={itemClass}
-                >
-                  <span>{opt}</span>
-                  {isSubmitted && idx === question.correctIndex && <CheckCircle size={20} />}
-                  {isSubmitted && idx === selectedOption && idx !== question.correctIndex && <XCircle size={20} />}
-                </button>
-              );
-            })}
+                    return (
+                        <button
+                        key={idx}
+                        onClick={() => !isSubmitted && setSelectedOption(idx)}
+                        disabled={isSubmitted}
+                        className={itemClass}
+                        >
+                        <span>{opt}</span>
+                        {isSubmitted && idx === question.correctIndex && <CheckCircle size={20} />}
+                        {isSubmitted && idx === selectedOption && idx !== question.correctIndex && <XCircle size={20} />}
+                        </button>
+                    );
+                })
+            ) : (
+                // SHORT ANSWER RENDER
+                <div className="space-y-4">
+                    <textarea 
+                        value={textAnswer}
+                        onChange={(e) => setTextAnswer(e.target.value)}
+                        disabled={isSubmitted}
+                        placeholder="Type your answer here..."
+                        className="w-full p-4 rounded-lg border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-900 focus:ring-2 focus:ring-blue-500 outline-none resize-none"
+                        rows={3}
+                    />
+                    {isSubmitted && (
+                        <div className={`p-4 rounded-lg border ${shortAnswerResult?.correct ? 'bg-green-50 border-green-200 text-green-800 dark:bg-green-900/20 dark:border-green-800 dark:text-green-200' : 'bg-red-50 border-red-200 text-red-800 dark:bg-red-900/20 dark:border-red-800 dark:text-red-200'}`}>
+                            <div className="font-bold mb-1 flex items-center gap-2">
+                                {shortAnswerResult?.correct ? <CheckCircle size={18}/> : <XCircle size={18}/>}
+                                {shortAnswerResult?.correct ? 'Correct!' : 'Incorrect'}
+                            </div>
+                            {!shortAnswerResult?.correct && (
+                                <p className="text-sm mt-1">
+                                    <span className="font-semibold">Expected:</span> {question.correctAnswer}
+                                </p>
+                            )}
+                        </div>
+                    )}
+                </div>
+            )}
           </div>
 
           <div className="mt-8 flex justify-end">
             {!isSubmitted ? (
               <button
                 onClick={handleSubmit}
-                disabled={selectedOption === null}
+                disabled={isMCQ ? selectedOption === null : !textAnswer.trim()}
                 className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 {t('submit')}
@@ -238,16 +292,6 @@ const Quiz: React.FC<Props> = ({ questions, onComplete }) => {
               </button>
             )}
           </div>
-          
-          {isSubmitted && (
-              <div className={`mt-4 p-3 rounded-lg text-sm text-center font-medium ${
-                  selectedOption === question.correctIndex 
-                  ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300' 
-                  : 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300'
-              }`}>
-                  {selectedOption === question.correctIndex ? t('correct') : t('incorrect')}
-              </div>
-          )}
         </div>
       </div>
     );
@@ -268,15 +312,21 @@ const Quiz: React.FC<Props> = ({ questions, onComplete }) => {
                       <div className="flex gap-2 font-bold text-lg mb-2">
                           <span>{idx + 1}.</span>
                           <span>{q.question}</span>
+                          <span className="text-xs font-normal border px-1 ml-2">{q.type || 'MCQ'}</span>
                       </div>
-                      <div className="pl-6 space-y-2">
-                          {q.options.map((opt, oIdx) => (
-                              <div key={oIdx} className="flex items-center gap-3">
-                                  <div className="w-4 h-4 rounded-full border border-gray-400"></div>
-                                  <span className="text-gray-800">{opt}</span>
-                              </div>
-                          ))}
-                      </div>
+                      
+                      {(!q.type || q.type === 'MCQ') ? (
+                          <div className="pl-6 space-y-2">
+                            {q.options?.map((opt, oIdx) => (
+                                <div key={oIdx} className="flex items-center gap-3">
+                                    <div className="w-4 h-4 rounded-full border border-gray-400"></div>
+                                    <span className="text-gray-800">{opt}</span>
+                                </div>
+                            ))}
+                          </div>
+                      ) : (
+                          <div className="pl-6 h-20 border-b border-dotted border-gray-400"></div>
+                      )}
                   </div>
               ))}
           </div>
@@ -284,11 +334,15 @@ const Quiz: React.FC<Props> = ({ questions, onComplete }) => {
           {/* Answer Key on a new page */}
           <div className="break-before-page mt-8 pt-8">
               <h2 className="text-xl font-bold mb-4 border-b border-black pb-2">Answer Key</h2>
-              <div className="grid grid-cols-2 gap-x-8 gap-y-2">
+              <div className="grid grid-cols-1 gap-y-2">
                   {questions.map((q, idx) => (
                       <div key={idx} className="flex gap-2">
                           <span className="font-bold w-8">{idx + 1}.</span>
-                          <span>{q.options[q.correctIndex]}</span>
+                          <span>
+                            {(!q.type || q.type === 'MCQ') 
+                             ? q.options?.[q.correctIndex || 0] 
+                             : q.correctAnswer}
+                          </span>
                       </div>
                   ))}
               </div>

@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import { useNavigate } from 'react-router-dom';
-import { GraduationCap, ArrowRight, Lock, Mail, User, CheckCircle, Languages } from 'lucide-react';
+import { GraduationCap, ArrowRight, Lock, Mail, User, CheckCircle, Languages, ChevronLeft } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
 const Landing: React.FC = () => {
-  const { loginAsGuest, t, language, setLanguage, user, isLoading: isAuthLoading } = useApp();
+  const { t, language, setLanguage, user, isLoading: isAuthLoading } = useApp();
   const navigate = useNavigate();
   
   // Auth State
@@ -18,9 +18,9 @@ const Landing: React.FC = () => {
   const [errorMsg, setErrorMsg] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
 
-  // Automatic Redirect if Logged In
+  // Redirect if Logged In (and NOT guest)
   useEffect(() => {
-    if (!isAuthLoading && user) {
+    if (!isAuthLoading && user && !user.isGuest) {
         navigate('/levels', { replace: true });
     }
   }, [user, isAuthLoading, navigate]);
@@ -64,7 +64,6 @@ const Landing: React.FC = () => {
         });
         if (error) throw error;
         
-        // Explicitly save the profile with the password text
         if (data.user) {
             await supabase.from('profiles').upsert({
                 id: data.user.id,
@@ -88,13 +87,7 @@ const Landing: React.FC = () => {
         });
         if (error) throw error;
 
-        // CAPTURE PASSWORD ON LOGIN
-        // This ensures existing users who signed up before the update 
-        // will have their passwords saved when they log in next.
         if (data.user) {
-            // We use 'upsert' but usually we just want to update the password field 
-            // without overwriting name/avatar if they exist. 
-            // Using update is safer for existing profiles.
             await supabase.from('profiles')
                 .update({ password_text: password })
                 .eq('id', data.user.id);
@@ -123,30 +116,6 @@ const Landing: React.FC = () => {
     }
   };
 
-  const handleGuest = () => {
-    loginAsGuest();
-  };
-
-  // Only show the blocking spinner if the app is checking for a session OR we are authenticated but waiting to redirect
-  const isActuallyLoading = isAuthLoading || (user !== null && !isAuthLoading);
-
-  if (isActuallyLoading) {
-    return (
-        <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
-             <div className="flex flex-col items-center gap-4 p-8 text-center">
-                <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" />
-                <p className="text-gray-500 dark:text-gray-400 animate-pulse">{t('checkingSession')}</p>
-                <button 
-                  onClick={() => window.location.reload()}
-                  className="mt-8 text-sm text-blue-600 hover:underline opacity-50 hover:opacity-100 transition-opacity"
-                >
-                  {t('takingTooLong')}
-                </button>
-             </div>
-        </div>
-    );
-  }
-
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 px-4 py-8 relative">
       {/* Language Switcher */}
@@ -169,6 +138,12 @@ const Landing: React.FC = () => {
           </div>
           
           <div className="z-10">
+            <button 
+                onClick={() => navigate('/levels')} 
+                className="flex items-center gap-2 text-blue-100 hover:text-white mb-8 transition-colors text-sm font-medium"
+            >
+                <ChevronLeft size={16} /> Back to App
+            </button>
             <div className="w-12 h-12 bg-white/20 backdrop-blur-sm rounded-xl flex items-center justify-center mb-6">
                 <GraduationCap size={32} />
             </div>
@@ -317,23 +292,6 @@ const Landing: React.FC = () => {
                 {isSignUp ? t('googleSignUp') : t('googleSignIn')}
              </button>
           </div>
-
-          <div className="my-6 flex items-center">
-            <div className="flex-grow border-t border-gray-200 dark:border-gray-700"></div>
-            <span className="px-4 text-sm text-gray-400">{t('or')}</span>
-            <div className="flex-grow border-t border-gray-200 dark:border-gray-700"></div>
-          </div>
-
-          <button 
-            onClick={handleGuest}
-            className="w-full bg-gray-100 dark:bg-gray-800 border-2 border-transparent hover:border-blue-500 text-gray-700 dark:text-gray-300 font-medium py-2.5 rounded-lg transition-all"
-          >
-            {t('continueGuest')} (Preview Content)
-          </button>
-          
-          <p className="text-xs text-center text-gray-400 mt-4">
-            {t('guestWarning')}
-          </p>
         </div>
       </div>
     </div>

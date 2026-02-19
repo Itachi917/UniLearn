@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useApp } from '../../context/AppContext';
-import { Moon, Sun, Languages, LogOut, User as UserIcon, Settings, Palette, Check } from 'lucide-react';
+import { Moon, Sun, Languages, LogOut, User as UserIcon, Settings, Palette, Check, LogIn } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { APP_THEMES } from '../../constants';
 
@@ -12,7 +12,7 @@ const Navbar: React.FC = () => {
 
   const handleLogout = () => {
     logout();
-    navigate('/');
+    navigate('/'); // Will redirect to levels
   };
 
   useEffect(() => {
@@ -112,11 +112,21 @@ const Navbar: React.FC = () => {
                     </Link>
                     )}
 
-                    <div className="hidden sm:flex flex-col items-end mr-2">
-                    <span className="text-sm font-medium text-gray-900 dark:text-gray-100 max-w-[100px] truncate">
-                        {user.name || (user.isGuest ? t('guestMode') : user.email?.split('@')[0])}
-                    </span>
-                    </div>
+                    {user.isGuest ? (
+                        <Link 
+                            to="/login"
+                            className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors"
+                        >
+                            <LogIn size={16} />
+                            {t('login')}
+                        </Link>
+                    ) : (
+                        <div className="hidden sm:flex flex-col items-end mr-2">
+                            <span className="text-sm font-medium text-gray-900 dark:text-gray-100 max-w-[100px] truncate">
+                                {user.name || user.email?.split('@')[0]}
+                            </span>
+                        </div>
+                    )}
                     
                     <div className="relative group flex items-center gap-1">
                         <Link to="/profile" className="p-1 rounded-full text-gray-600 dark:text-gray-300 hover:opacity-80 transition-opacity">
@@ -128,13 +138,15 @@ const Navbar: React.FC = () => {
                                 </div>
                             )}
                         </Link>
-                        <button 
-                            onClick={handleLogout}
-                            className="p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
-                            title={t('signOut')}
-                        >
-                            <LogOut size={20} />
-                        </button>
+                        {!user.isGuest && (
+                            <button 
+                                onClick={handleLogout}
+                                className="p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+                                title={t('signOut')}
+                            >
+                                <LogOut size={20} />
+                            </button>
+                        )}
                     </div>
                 </div>
               </>

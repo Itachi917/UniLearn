@@ -7,9 +7,16 @@ export interface Flashcard {
 
 export interface QuizQuestion {
   id: number;
+  type: 'MCQ' | 'SHORT'; 
   question: string;
-  options: string[];
-  correctIndex: number;
+  // For MCQ
+  options?: string[];
+  correctIndex?: number;
+  // For Short Answer
+  correctAnswer?: string; // The display answer
+  acceptedAnswers?: string[]; // Variations for auto-marking
+  // Metadata
+  lectureId?: string; // To link specific questions to lectures within the subject bank
 }
 
 export interface Lecture {
@@ -29,6 +36,7 @@ export interface Subject {
   level: string;
   color: string; // Tailwind color class prefix e.g. "blue"
   lectures: Lecture[];
+  questionBank?: QuizQuestion[]; // Dedicated subject-wide questions
 }
 
 export interface UserProgress {

@@ -72,6 +72,7 @@ export const SEED_DATA: Subject[] = [
     titleAr: 'نظم التشغيل والأمن',
     level: 'Level-2',
     color: 'blue',
+    questionBank: [],
     lectures: [
       {
         id: 'lec-os-1',
@@ -98,12 +99,14 @@ export const SEED_DATA: Subject[] = [
         quiz: [
           {
             id: 1,
+            type: 'MCQ',
             question: "Which component is considered the intermediary between user and hardware?",
             options: ["Application Programs", "Operating System", "CPU", "Compiler"],
             correctIndex: 1
           },
           {
             id: 2,
+            type: 'MCQ',
             question: "Where is the Bootstrap program stored?",
             options: ["RAM", "Hard Disk", "ROM", "Cache"],
             correctIndex: 2
@@ -136,12 +139,14 @@ export const SEED_DATA: Subject[] = [
         quiz: [
           {
             id: 1,
+            type: 'MCQ',
             question: "Which state represents a process waiting for a processor?",
             options: ["Waiting", "Ready", "New", "Running"],
             correctIndex: 1
           },
           {
             id: 2,
+            type: 'MCQ',
             question: "What does PCB stand for?",
             options: ["Program Control Block", "Process Control Block", "Process Central Board", "Program Central Bus"],
             correctIndex: 1
@@ -156,6 +161,7 @@ export const SEED_DATA: Subject[] = [
     titleAr: 'أساسيات التجارة الإلكترونية',
     level: 'Level-2',
     color: 'emerald',
+    questionBank: [],
     lectures: [
       {
         id: 'lec-ecom-1',
@@ -191,12 +197,14 @@ export const SEED_DATA: Subject[] = [
         quiz: [
           {
             id: 1,
+            type: 'MCQ',
             question: "Which of these is a Payment Gateway?",
             options: ["Salesforce", "Magento", "Stripe", "Apache"],
             correctIndex: 2
           },
           {
             id: 2,
+            type: 'MCQ',
             question: "What is the purpose of a CDN?",
             options: ["To encrypt data", "To distribute content for faster load times", "To manage customer relationships", "To process payments"],
             correctIndex: 1
@@ -211,6 +219,7 @@ export const SEED_DATA: Subject[] = [
     titleAr: 'نظم معلومات الويب',
     level: 'Level-2',
     color: 'indigo',
+    questionBank: [],
     lectures: [
        { id: 'lec-wis-1', title: 'Lecture 1: Web Architecture', titleAr: 'المحاضرة 1: معمارية الويب', summary: 'Overview of HTTP, Client-Server model.', flashcards: [], quiz: [] }
     ]
@@ -221,6 +230,7 @@ export const SEED_DATA: Subject[] = [
     titleAr: 'الرسوم المتحركة الحاسوبية',
     level: 'Level-2',
     color: 'purple',
+    questionBank: [],
     lectures: [
         { id: 'lec-anim-1', title: 'Lecture 1: Principles of Animation', titleAr: 'المحاضرة 1: مبادئ الرسوم المتحركة', summary: 'Squash and stretch, anticipation, staging.', flashcards: [], quiz: [] }
     ]
@@ -231,6 +241,7 @@ export const SEED_DATA: Subject[] = [
     titleAr: 'مقدمة في ذكاء الأعمال',
     level: 'Level-2',
     color: 'indigo',
+    questionBank: [],
     lectures: [
         { id: 'lec-bi-1', title: 'Lecture 1: What is BI?', titleAr: 'المحاضرة 1: ما هو ذكاء الأعمال؟', summary: 'Business Intelligence (BI) refers to the procedural and technical infrastructure that collects, stores, and analyzes the data produced by a company’s activities.', flashcards: [], quiz: [] }
     ]
@@ -241,6 +252,7 @@ export const SEED_DATA: Subject[] = [
     titleAr: 'هندسة البرمجيات',
     level: 'Level-2',
     color: 'blue',
+    questionBank: [],
     lectures: [
         { id: 'lec-se-1', title: 'Lecture 1: SDLC', titleAr: 'المحاضرة 1: دورة حياة تطوير البرمجيات', summary: 'SDLC stands for Software Development Life Cycle.', flashcards: [], quiz: [] }
     ]
@@ -251,6 +263,7 @@ export const SEED_DATA: Subject[] = [
     titleAr: 'تصميم الوسائط الرقمية',
     level: 'Level-2',
     color: 'purple',
+    questionBank: [],
     lectures: [
         { id: 'lec-dmd-1', title: 'Lecture 1: Color Theory', titleAr: 'المحاضرة 1: نظرية الألوان', summary: 'Understanding how colors interact, combine, and impact perception.', flashcards: [], quiz: [] }
     ]
@@ -261,6 +274,7 @@ export const SEED_DATA: Subject[] = [
     titleAr: 'نظم قواعد البيانات المتقدمة',
     level: 'Level-2',
     color: 'emerald',
+    questionBank: [],
     lectures: [
         { id: 'lec-db-1', title: 'Lecture 1: Normalization', titleAr: 'المحاضرة 1: التطبيع', summary: 'Database normalization is the process of structuring a relational database in accordance with a series of so-called normal forms in order to reduce data redundancy and improve data integrity.', flashcards: [], quiz: [] }
     ]
