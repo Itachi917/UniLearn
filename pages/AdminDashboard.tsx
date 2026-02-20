@@ -439,15 +439,19 @@ const AdminDashboard: React.FC = () => {
             data = repairAndParseJSON(cleanedText);
         }
         
+        if (!data || typeof data !== 'object') {
+            throw new Error("AI returned invalid data format (not an object).");
+        }
+
         const newSubs = [...subjects];
         
         if (target === 'LECTURE') {
             const updatedLecture = {
                 ...newSubs[activeSubjectIdx].lectures[activeLectureIdx],
-                summary: data.summary,
-                topics: data.topics,
-                flashcards: data.flashcards,
-                quiz: data.quiz.map((q: any, i: number) => ({ ...q, id: Date.now() + i }))
+                summary: data.summary || "",
+                topics: Array.isArray(data.topics) ? data.topics : [],
+                flashcards: Array.isArray(data.flashcards) ? data.flashcards : [],
+                quiz: (Array.isArray(data.quiz) ? data.quiz : []).map((q: any, i: number) => ({ ...q, id: Date.now() + i }))
             };
             newSubs[activeSubjectIdx].lectures[activeLectureIdx] = updatedLecture;
             setMsg({ type: 'success', text: 'Lecture content generated successfully!' });

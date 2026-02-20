@@ -17,9 +17,9 @@ const ProtectedRoute = ({ children }: { children?: ReactNode }) => {
   if (isLoading) return <div className="min-h-screen flex items-center justify-center">Loading...</div>;
   
   // Since we auto-login guests, 'user' should rarely be null unless initial load failed.
-  // But if it is null, redirect to root which redirects to levels (initiating guest).
+  // But if it is null, redirect to login page to avoid infinite loop with root redirect
   if (!user) {
-    return <Navigate to="/" replace />;
+    return <Navigate to="/login" replace />;
   }
   return <>{children}</>;
 };
