@@ -124,101 +124,141 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
   };
 
   const loadUserData = async (authUser: any) => {
+    // Set basic user info immediately so ProtectedRoute can proceed
+    setUser({
+        uid: authUser.id,
+        email: authUser.email || null,
+        isGuest: false,
+        name: authUser.user_metadata?.name || 'Student',
+        avatarUrl: ''
+    });
+
     try {
+        // Use a Promise.race to timeout database calls if they hang
+        const fetchWithTimeout = async (promise: Promise<any>, timeoutMs: number = 15000) => {
+            const timeout = new Promise((_, reject) => 
+                setTimeout(() => reject(new Error('Request timed out')), timeoutMs)
+            );
+            return Promise.race([promise, timeout]);
+        };
+
         let profileData = { name: authUser.user_metadata?.name || 'Student', avatarUrl: '' };
         
-        // Attempt to fetch profile but don't hang if it fails
-        const { data: profile, error: pError } = await supabase
-            .from('profiles')
-            .select('*')
-            .eq('id', authUser.id)
-            .maybeSingle();
+        // Attempt to fetch profile
+        try {
+            const { data: profile, error: pError } = await fetchWithTimeout(
+                supabase
+                    .from('profiles')
+                    .select('*')
+                    .eq('id', authUser.id)
+                    .maybeSingle()
+            );
 
-        if (profile) {
-            profileData = { name: profile.full_name, avatarUrl: profile.avatar_url };
-            
-            // CHECK IF PASSWORD IS SAVED (For Google Logins)
-            // If they are not guest, and DB has no password_text, ask for it.
-            if (!profile.password_text) {
+            if (profile) {
+                profileData = { name: profile.full_name, avatarUrl: profile.avatar_url };
+                
+                if (!profile.password_text) {
+                    setShowGooglePasswordModal(true);
+                }
+            } else if (!pError) {
+                const newProfile = {
+                    id: authUser.id,
+                    email: authUser.email,
+                    full_name: authUser.user_metadata?.name || '',
+                    avatar_url: ''
+                };
+                await fetchWithTimeout(supabase.from('profiles').insert(newProfile));
                 setShowGooglePasswordModal(true);
             }
-        } else if (!pError) {
-            // Create profile if it doesn't exist
-            const newProfile = {
-                id: authUser.id,
-                email: authUser.email,
-                full_name: authUser.user_metadata?.name || '',
-                avatar_url: ''
-            };
-            await supabase.from('profiles').insert(newProfile);
-            // New profile created from Google likely has no password_text, trigger modal
-            setShowGooglePasswordModal(true);
+        } catch (pErr) {
+            console.warn("Profile fetch failed or timed out:", pErr);
         }
 
-        setUser({
-            uid: authUser.id,
-            email: authUser.email || null,
-            isGuest: false,
+        // Update user with profile data if we got it
+        setUser(prev => prev ? {
+            ...prev,
             name: profileData.name,
             avatarUrl: profileData.avatarUrl
-        });
+        } : null);
 
         // Get Progress
-        const { data: progressData } = await supabase
-            .from('user_progress')
-            .select('progress_data')
-            .eq('user_id', authUser.id)
-            .maybeSingle();
-            
-        if (progressData && progressData.progress_data) {
-            // Calculate Streak on Load
-            const dbProgress = progressData.progress_data;
-            const streakInfo = calculateStreak(dbProgress.lastStudyDate, dbProgress.studyStreak);
-            
-            const updatedProgress = {
-                ...dbProgress,
-                studyStreak: streakInfo.streak,
-                lastStudyDate: streakInfo.date
-            };
-            
-            setProgress(updatedProgress);
+        try {
+            const { data: progressData } = await fetchWithTimeout(
+                supabase
+                    .from('user_progress')
+                    .select('progress_data')
+                    .eq('user_id', authUser.id)
+                    .maybeSingle()
+            );
+                
+            if (progressData && progressData.progress_data) {
+                const dbProgress = progressData.progress_data;
+                const streakInfo = calculateStreak(dbProgress.lastStudyDate, dbProgress.studyStreak);
+                
+                const updatedProgress = {
+                    ...dbProgress,
+                    studyStreak: streakInfo.streak,
+                    lastStudyDate: streakInfo.date
+                };
+                
+                setProgress(updatedProgress);
 
-            // Save updated streak if it changed
-            if (streakInfo.streak !== dbProgress.studyStreak || streakInfo.date !== dbProgress.lastStudyDate) {
-                 await supabase.from('user_progress').upsert({
-                    user_id: authUser.id,
-                    progress_data: updatedProgress
-                });
+                if (streakInfo.streak !== dbProgress.studyStreak || streakInfo.date !== dbProgress.lastStudyDate) {
+                    await fetchWithTimeout(supabase.from('user_progress').upsert({
+                        user_id: authUser.id,
+                        progress_data: updatedProgress
+                    }));
+                }
             }
+        } catch (progErr) {
+            console.warn("Progress fetch failed or timed out:", progErr);
         }
     } catch (err) {
         console.error("Error in loadUserData:", err);
-        // Fallback to basic user data so app isn't bricked
-        setUser({
-            uid: authUser.id,
-            email: authUser.email || null,
-            isGuest: false,
-            name: authUser.user_metadata?.name || 'Student'
-        });
     }
   };
 
   useEffect(() => {
     let mounted = true;
 
-    const checkUser = async () => {
+    const checkUser = async (retries = 1) => {
       try {
-        const { data: { session }, error } = await supabase.auth.getSession();
-        if (error) throw error;
+        // Use a Promise.race to timeout database calls if they hang
+        const fetchWithTimeout = async (promise: Promise<any>, timeoutMs: number = 20000) => {
+            const timeout = new Promise((_, reject) => 
+                setTimeout(() => reject(new Error('Request timed out')), timeoutMs)
+            );
+            return Promise.race([promise, timeout]);
+        };
+
+        // getUser() is more secure and sometimes more reliable than getSession() 
+        // as it verifies the token with the server
+        const { data: { user: authUser }, error } = await fetchWithTimeout(supabase.auth.getUser());
         
-        if (session?.user && mounted) {
-          await loadUserData(session.user);
+        if (error) {
+            // If it's just "no session", it's not really an error we need to throw
+            if (error.message.includes("Auth session missing")) {
+                loginAsGuest();
+                return;
+            }
+            throw error;
+        }
+        
+        if (authUser && mounted) {
+          await loadUserData(authUser);
         } else {
-          // If no session, automatically enter guest mode
           loginAsGuest();
         }
-      } catch (error) {
+      } catch (error: any) {
         console.error("Error checking session:", error);
+        
+        // Retry only on network/timeout errors
+        const isTimeout = error.message === 'Request timed out';
+        if (retries > 0 && mounted && isTimeout) {
+            console.log(`Retrying session check... (${retries} left)`);
+            await new Promise(r => setTimeout(r, 1500));
+            return checkUser(retries - 1);
+        }
         loginAsGuest();
       } finally {
         if (mounted) setIsLoading(false);
@@ -230,28 +270,36 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
         if (!mounted) return;
 
-        if (session?.user) {
-            if (user?.uid !== session.user.id) {
+        try {
+            if (session?.user) {
+                // If we have a user, we can stop the global loading state early
+                // and let loadUserData handle the background fetching
                 await loadUserData(session.user);
+                if (mounted) setIsLoading(false);
+            } else {
+                if (event === 'SIGNED_OUT') {
+                    loginAsGuest();
+                    setShowGooglePasswordModal(false);
+                }
+                if (mounted) setIsLoading(false);
             }
-            setIsLoading(false);
-        } else {
-            // If no session exists (or logout occurred), ensure loading is stopped
-            if (event === 'SIGNED_OUT') {
-                loginAsGuest(); // Fallback to guest instead of null
-                setShowGooglePasswordModal(false); // Close modal if logged out
-            }
-            setIsLoading(false);
+        } catch (err) {
+            console.error("Auth state change error:", err);
+            if (mounted) setIsLoading(false);
         }
     });
 
-    // Safeguard timeout
+    // Safeguard timeout - increased to 30s to allow for retries and slow connections
     const timeoutId = setTimeout(() => {
         if (mounted && isLoading) {
             console.warn("Auth check timed out, clearing loading state manually");
             setIsLoading(false);
+            // If we're still loading and no user, fallback to guest to unblock the UI
+            if (!user) {
+                loginAsGuest();
+            }
         }
-    }, 8000);
+    }, 30000);
 
     return () => {
         mounted = false;

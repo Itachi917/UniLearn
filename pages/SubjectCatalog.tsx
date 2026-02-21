@@ -19,7 +19,7 @@ const SubjectSelectionModal: React.FC<{
   useEffect(() => {
     if (isOpen) {
         // Ensure we only track selections present in the passed subjects list
-        const relevantSelected = initialSelected.filter(id => subjects.some(s => s.id === id));
+        const relevantSelected = initialSelected.filter(id => subjects.some(s => String(s.id) === String(id)));
         setSelected(relevantSelected.length > 0 ? relevantSelected : []);
     }
   }, [isOpen, initialSelected, subjects]);
@@ -135,12 +135,12 @@ const SubjectCatalog: React.FC = () => {
 
   // Get enrolled IDs that belong to THIS level
   const enrolledIds = progress.enrolledSubjectIds || [];
-  const levelEnrolledIds = enrolledIds.filter(id => levelSubjects.some(s => s.id === id));
+  const levelEnrolledIds = enrolledIds.filter(id => levelSubjects.some(s => String(s.id) === String(id)));
 
   const handleEnrollmentSave = (newLevelIds: string[]) => {
       // We must merge new selections for this level with existing selections for OTHER levels
       // 1. Find all enrolled IDs that are NOT in this level
-      const otherLevelIds = enrolledIds.filter(id => !levelSubjects.some(s => s.id === id));
+      const otherLevelIds = enrolledIds.filter(id => !levelSubjects.some(s => String(s.id) === String(id)));
       
       // 2. Combine
       const finalIds = [...otherLevelIds, ...newLevelIds];

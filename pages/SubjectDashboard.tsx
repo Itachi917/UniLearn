@@ -13,9 +13,17 @@ const SubjectDashboard: React.FC = () => {
   const [selectedLectures, setSelectedLectures] = useState<string[]>([]);
   const [generatedQuiz, setGeneratedQuiz] = useState<QuizQuestion[] | null>(null);
 
-  const subject = subjects.find(s => s.id === subjectId);
+  const subject = subjects.find(s => String(s.id) === String(subjectId));
 
-  if (!subject) return <div>Subject not found</div>;
+  if (!subject) return (
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex flex-col">
+      <Navbar />
+      <div className="p-8 text-center">
+        <h2 className="text-xl font-bold text-gray-900 dark:text-white">Subject not found</h2>
+        <Link to="/levels" className="text-blue-600 hover:underline mt-4 inline-block">Back to Levels</Link>
+      </div>
+    </div>
+  );
 
   const handleStartQuiz = () => {
       // 1. Gather questions

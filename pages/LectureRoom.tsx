@@ -15,7 +15,7 @@ const LectureRoom: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'summary' | 'flashcards' | 'quiz' | 'media'>('summary');
 
   const subject = subjects.find(s => s.id === subjectId);
-  const lecture = subject?.lectures.find(l => l.id === lectureId);
+  const lecture = subject?.lectures.find(l => String(l.id) === String(lectureId));
 
   // Flashcard Deck State
   const [deck, setDeck] = useState<IFlashcard[]>([]);
@@ -55,7 +55,29 @@ const LectureRoom: React.FC = () => {
     }
   }, [lecture]);
 
-  if (!subject || !lecture) return <div className="p-8">Lecture not found</div>;
+  if (!subject) return (
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex flex-col">
+      <Navbar />
+      <div className="p-8 text-center">
+        <h2 className="text-xl font-bold text-gray-900 dark:text-white">Subject not found</h2>
+        <Link to="/levels" className="text-blue-600 hover:underline mt-4 inline-block">Back to Levels</Link>
+      </div>
+    </div>
+  );
+
+  if (!lecture) return (
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex flex-col">
+      <Navbar />
+      <div className="p-8 text-center">
+        <h2 className="text-xl font-bold text-gray-900 dark:text-white">Lecture not found</h2>
+        <Link to={`/subject/${subject.id}`} className="text-blue-600 hover:underline mt-4 inline-block">Back to Subject</Link>
+      </div>
+    </div>
+  );
+
+  const summaryContent = (language === 'ar' ? (lecture.summaryAr || lecture.summary) : lecture.summary) || '';
+  const lectureTitle = (language === 'ar' ? (lecture.titleAr || lecture.title) : lecture.title) || 'Untitled Lecture';
+  const subjectTitle = (language === 'ar' ? (subject.titleAr || subject.title) : subject.title) || 'Untitled Subject';
 
   const handleQuizComplete = (score: number) => {
     updateQuizScore(lecture.id, score);
@@ -228,17 +250,17 @@ const LectureRoom: React.FC = () => {
         <div className="mb-8 no-print">
              <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400 mb-3">
                 <Link to={`/subject/${subject.id}`} className="hover:text-blue-600 dark:hover:text-blue-400 transition-colors">
-                    {language === 'ar' ? subject.titleAr : subject.title}
+                    {subjectTitle}
                 </Link>
                 <ChevronRight size={14} className="rtl:rotate-180" />
                 <span className="text-gray-900 dark:text-white font-medium line-clamp-1">
-                    {language === 'ar' ? lecture.titleAr : lecture.title}
+                    {lectureTitle}
                 </span>
             </div>
             
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white flex items-center gap-3">
-                    {language === 'ar' ? lecture.titleAr : lecture.title}
+                    {lectureTitle}
                     {progress.completedLectures.includes(lecture.id) && (
                         <CheckCircle size={24} className="text-green-500 flex-shrink-0" />
                     )}
@@ -287,7 +309,13 @@ const LectureRoom: React.FC = () => {
         <div className="min-h-[400px]">
             {activeTab === 'summary' && (
                 <div className="bg-card dark:bg-gray-800 rounded-2xl p-8 shadow-sm border border-gray-200 dark:border-gray-700 prose dark:prose-invert max-w-none">
-                    <ReactMarkdown>{(language === 'ar' && lecture.summaryAr) ? lecture.summaryAr : lecture.summary}</ReactMarkdown>
+                    {summaryContent ? (
+                        <ReactMarkdown>{summaryContent}</ReactMarkdown>
+                    ) : (
+                        <div className="text-center py-12 text-gray-500">
+                            No summary available for this lecture.
+                        </div>
+                    )}
                     
                     {lecture.topics && (
                         <div className="mt-8 pt-6 border-t border-gray-100 dark:border-gray-700">

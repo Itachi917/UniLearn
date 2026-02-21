@@ -164,12 +164,12 @@ const AdminDashboard: React.FC = () => {
 
   const handleAcceptSuggestion = async (sugg: FlashcardSuggestion) => {
       // 1. Find the subject and lecture
-      const subIdx = subjects.findIndex(s => s.id === sugg.subjectId);
+      const subIdx = subjects.findIndex(s => String(s.id) === String(sugg.subjectId));
       if (subIdx === -1) {
           alert("Subject not found. It might have been deleted.");
           return;
       }
-      const lecIdx = subjects[subIdx].lectures.findIndex(l => l.id === sugg.lectureId);
+      const lecIdx = subjects[subIdx].lectures.findIndex(l => String(l.id) === String(sugg.lectureId));
       if (lecIdx === -1) {
           alert("Lecture not found. It might have been deleted.");
           return;
@@ -485,7 +485,7 @@ const AdminDashboard: React.FC = () => {
             const currentBank = newSubs[activeSubjectIdx].questionBank || [];
             newSubs[activeSubjectIdx].questionBank = [...currentBank, ...questionsWithIds];
             const addedCount = newQuestions.length;
-            const targetName = linkedLectureId ? subjects[activeSubjectIdx].lectures.find(l => l.id === linkedLectureId)?.title : 'Subject Bank';
+            const targetName = linkedLectureId ? subjects[activeSubjectIdx].lectures.find(l => String(l.id) === String(linkedLectureId))?.title : 'Subject Bank';
             setMsg({ type: 'success', text: `Added ${addedCount} questions linked to ${targetName}.` });
         }
         

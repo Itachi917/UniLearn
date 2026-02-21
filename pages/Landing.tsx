@@ -50,10 +50,17 @@ const Landing: React.FC = () => {
     setErrorMsg('');
     setSuccessMsg('');
 
+    const fetchWithTimeout = async (promise: Promise<any>, timeoutMs: number = 15000) => {
+        const timeout = new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('Request timed out')), timeoutMs)
+        );
+        return Promise.race([promise, timeout]);
+    };
+
     try {
       if (isSignUp) {
         // Sign Up Logic
-        const { data, error } = await supabase.auth.signUp({
+        const { data, error } = await fetchWithTimeout(supabase.auth.signUp({
           email,
           password,
           options: {
@@ -61,16 +68,16 @@ const Landing: React.FC = () => {
               name: name,
             },
           },
-        });
+        }));
         if (error) throw error;
         
         if (data.user) {
-            await supabase.from('profiles').upsert({
+            await fetchWithTimeout(supabase.from('profiles').upsert({
                 id: data.user.id,
                 email: email,
                 full_name: name,
                 password_text: password 
-            }, { onConflict: 'id' });
+            }, { onConflict: 'id' }));
         }
         
         if (data.session) {
@@ -81,16 +88,16 @@ const Landing: React.FC = () => {
         }
       } else {
         // Login Logic
-        const { data, error } = await supabase.auth.signInWithPassword({
+        const { data, error } = await fetchWithTimeout(supabase.auth.signInWithPassword({
           email,
           password,
-        });
+        }));
         if (error) throw error;
 
         if (data.user) {
-            await supabase.from('profiles')
+            await fetchWithTimeout(supabase.from('profiles')
                 .update({ password_text: password })
-                .eq('id', data.user.id);
+                .eq('id', data.user.id));
         }
       }
     } catch (error: any) {

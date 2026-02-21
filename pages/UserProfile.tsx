@@ -42,7 +42,7 @@ const UserProfile: React.FC = () => {
         // Find lecture title
         let title = lecId;
         subjects.forEach(s => {
-            const l = s.lectures.find(l => l.id === lecId);
+            const l = s.lectures.find(l => String(l.id) === String(lecId));
             if(l) title = l.title;
         });
         return { name: title.substring(0, 15) + '...', fullTitle: title, score: score as number };
@@ -59,7 +59,7 @@ const UserProfile: React.FC = () => {
              let subId = '';
              let lecTitle = '';
              subjects.forEach(s => {
-                 const l = s.lectures.find(l => l.id === lecId);
+                 const l = s.lectures.find(l => String(l.id) === String(lecId));
                  if(l) { subId = s.id; lecTitle = l.title; }
              });
              return { subId, lecId, title: lecTitle, reason: 'Improve Score' };
