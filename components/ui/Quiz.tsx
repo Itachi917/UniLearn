@@ -10,7 +10,7 @@ interface Props {
 }
 
 const Quiz: React.FC<Props> = ({ questions, onComplete }) => {
-  const { t, triggerLoginPopup } = useApp();
+  const { t, triggerLoginPopup, language } = useApp();
   
   // Setup State
   const [hasStarted, setHasStarted] = useState(false);
@@ -190,12 +190,16 @@ const Quiz: React.FC<Props> = ({ questions, onComplete }) => {
     const question = questions[currentQIndex];
     const isMCQ = question.type === 'MCQ' || !question.type;
 
+    const displayQuestion = (language === 'ar' && question.questionAr) ? question.questionAr : question.question;
+    const displayOptions = (language === 'ar' && question.optionsAr) ? question.optionsAr : question.options;
+    const displayCorrectAnswer = (language === 'ar' && question.correctAnswerAr) ? question.correctAnswerAr : (question.correctAnswer || question.acceptedAnswers?.[0] || (language === 'ar' ? "لا توجد إجابة مقدمة" : "No answer provided"));
+
     return (
       <div className="bg-card dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
         {/* Header with Progress & Timer */}
         <div className="bg-gray-50 dark:bg-gray-900/50 p-4 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
           <span className="text-sm font-semibold text-gray-500 uppercase tracking-wide">
-              Question {currentQIndex + 1} of {questions.length}
+              {language === 'ar' ? `سؤال ${currentQIndex + 1} من ${questions.length}` : `Question ${currentQIndex + 1} of ${questions.length}`}
           </span>
           
           {timeLeft !== null && (
@@ -220,14 +224,14 @@ const Quiz: React.FC<Props> = ({ questions, onComplete }) => {
                   {isMCQ ? 'MCQ' : 'SA'}
               </span>
               <h3 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white flex-1">
-                  {question.question}
+                  {displayQuestion}
               </h3>
           </div>
 
           <div className="space-y-4">
             {isMCQ ? (
                 // MCQ RENDER
-                question.options?.map((opt, idx) => {
+                displayOptions?.map((opt, idx) => {
                     let itemClass = "w-full text-left p-4 rounded-lg border-2 transition-all duration-200 flex justify-between items-center ";
                     
                     if (isSubmitted) {
@@ -266,7 +270,7 @@ const Quiz: React.FC<Props> = ({ questions, onComplete }) => {
                         value={textAnswer}
                         onChange={(e) => setTextAnswer(e.target.value)}
                         disabled={isSubmitted}
-                        placeholder="Type your answer here..."
+                        placeholder={language === 'ar' ? "اكتب إجابتك هنا..." : "Type your answer here..."}
                         className="w-full p-4 rounded-lg border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-900 focus:ring-2 focus:ring-blue-500 outline-none resize-none"
                         rows={3}
                     />
@@ -274,11 +278,11 @@ const Quiz: React.FC<Props> = ({ questions, onComplete }) => {
                         <div className={`p-4 rounded-lg border ${shortAnswerResult?.correct ? 'bg-green-50 border-green-200 text-green-800 dark:bg-green-900/20 dark:border-green-800 dark:text-green-200' : 'bg-red-50 border-red-200 text-red-800 dark:bg-red-900/20 dark:border-red-800 dark:text-red-200'}`}>
                             <div className="font-bold mb-1 flex items-center gap-2">
                                 {shortAnswerResult?.correct ? <CheckCircle size={18}/> : <XCircle size={18}/>}
-                                {shortAnswerResult?.correct ? 'Correct!' : 'Incorrect'}
+                                {shortAnswerResult?.correct ? (language === 'ar' ? 'صحيح!' : 'Correct!') : (language === 'ar' ? 'غير صحيح' : 'Incorrect')}
                             </div>
                             {!shortAnswerResult?.correct && (
                                 <p className="text-sm mt-1">
-                                    <span className="font-semibold">Expected:</span> {question.correctAnswer || question.acceptedAnswers?.[0] || "No answer provided"}
+                                    <span className="font-semibold">{language === 'ar' ? 'المتوقع:' : 'Expected:'}</span> {displayCorrectAnswer}
                                 </p>
                             )}
                         </div>
@@ -328,44 +332,48 @@ const Quiz: React.FC<Props> = ({ questions, onComplete }) => {
       {/* Print Mode: Full List */}
       <div className="hidden print:block text-black bg-white">
           <div className="space-y-6">
-              {questions.map((q, idx) => (
-                  <div key={idx} className="break-inside-avoid border-b border-gray-200 pb-4">
-                      <div className="flex gap-2 font-bold text-lg mb-2">
-                          <span>{idx + 1}.</span>
-                          <span>{q.question}</span>
-                          <span className="text-xs font-normal border px-1 ml-2">{q.type || 'MCQ'}</span>
-                      </div>
-                      
-                      {(!q.type || q.type === 'MCQ') ? (
-                          <div className="pl-6 space-y-2">
-                            {q.options?.map((opt, oIdx) => (
-                                <div key={oIdx} className="flex items-center gap-3">
-                                    <div className="w-4 h-4 rounded-full border border-gray-400"></div>
-                                    <span className="text-gray-800">{opt}</span>
-                                </div>
-                            ))}
-                          </div>
-                      ) : (
-                          <div className="pl-6 h-20 border-b border-dotted border-gray-400"></div>
-                      )}
-                  </div>
-              ))}
+              {questions.map((q, idx) => {
+                  const displayQ = (language === 'ar' && q.questionAr) ? q.questionAr : q.question;
+                  const displayOpts = (language === 'ar' && q.optionsAr) ? q.optionsAr : q.options;
+
+                  return (
+                    <div key={idx} className="break-inside-avoid border-b border-gray-200 pb-4">
+                        <div className="flex gap-2 font-bold text-lg mb-2">
+                            <span>{idx + 1}.</span>
+                            <span>{displayQ}</span>
+                            <span className="text-xs font-normal border px-1 ml-2">{q.type || 'MCQ'}</span>
+                        </div>
+                        
+                        {(!q.type || q.type === 'MCQ') ? (
+                            <div className="pl-6 space-y-2">
+                                {displayOpts?.map((opt, oIdx) => (
+                                    <div key={oIdx} className="flex items-center gap-3">
+                                        <div className="w-4 h-4 rounded-full border border-gray-400"></div>
+                                        <span className="text-gray-800">{opt}</span>
+                                    </div>
+                                ))}
+                            </div>
+                        ) : (
+                            <div className="pl-6 h-20 border-b border-dotted border-gray-400"></div>
+                        )}
+                    </div>
+                  );
+              })}
           </div>
 
           {/* Answer Key on a new page */}
           <div className="break-before-page mt-8 pt-8">
-              <h2 className="text-xl font-bold mb-4 border-b border-black pb-2">Answer Key</h2>
+              <h2 className="text-xl font-bold mb-4 border-b border-black pb-2">{language === 'ar' ? 'مفتاح الإجابة' : 'Answer Key'}</h2>
               <div className="grid grid-cols-1 gap-y-2">
-                  {questions.map((q, idx) => (
-                      <div key={idx} className="flex gap-2">
-                          <span className="font-bold w-8">{idx + 1}.</span>
-                          <span>
-                            {(!q.type || q.type === 'MCQ') 
-                             ? q.options?.[q.correctIndex || 0] 
-                             : q.correctAnswer}
-                          </span>
-                      </div>
-                  ))}
+                  {questions.map((q, idx) => {
+                      const displayAns = (language === 'ar' && q.correctAnswerAr) ? q.correctAnswerAr : (q.correctAnswer || (q.optionsAr && language === 'ar' ? q.optionsAr[q.correctIndex || 0] : q.options?.[q.correctIndex || 0]));
+                      return (
+                        <div key={idx} className="flex gap-2">
+                            <span className="font-bold w-8">{idx + 1}.</span>
+                            <span>{displayAns}</span>
+                        </div>
+                      );
+                  })}
               </div>
           </div>
       </div>

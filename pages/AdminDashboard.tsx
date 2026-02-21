@@ -320,29 +320,33 @@ const AdminDashboard: React.FC = () => {
         let systemPrompt = "";
 
         if (target === 'LECTURE') {
-             systemPrompt = `Generate comprehensive, high-quality university-level lecture content.
+             systemPrompt = `Generate comprehensive, high-quality university-level lecture content in BOTH English and Arabic.
                 The subject is "${subjectTitle}".
                 Lecture Context: ${promptContext || lectureTitle}
                 
                 Requirements:
-                1. Summary: Create a detailed summary in Markdown. Use headers (#, ##), bullet points, and bold text for emphasis. Ensure it covers key concepts thoroughly.
-                2. Topics: List 5-8 key topics.
-                3. Flashcards: Generate at least 15 high-quality flashcards.
+                1. Summary: Create a detailed summary in Markdown (field: summary) and its Arabic translation (field: summaryAr). Use headers (#, ##), bullet points, and bold text for emphasis. Ensure it covers key concepts thoroughly.
+                2. Topics: List 5-8 key topics (English only).
+                3. Flashcards: Generate at least 15 high-quality flashcards. Each card must have:
+                   - question (English)
+                   - questionAr (Arabic)
+                   - answer (English)
+                   - answerAr (Arabic)
                 4. Quiz: Generate at least 10 questions. Mix Multiple Choice (MCQ) and Short Answer (SHORT) types.
-                   - For MCQ, provide 4 options and the correctIndex.
-                   - For SHORT, provide the main correctAnswer and a list of acceptedAnswers (variations, typos, synonyms).
+                   - For MCQ, provide 4 options (options) and their Arabic translations (optionsAr), and the correctIndex.
+                   - For SHORT, provide the main correctAnswer (English) and correctAnswerAr (Arabic), and a list of acceptedAnswers (variations, typos, synonyms in English).
                 
                 Output strictly valid JSON. No markdown code blocks.`;
         } else {
-             systemPrompt = `Generate a robust question bank for the university subject: "${subjectTitle}".
+             systemPrompt = `Generate a robust question bank for the university subject: "${subjectTitle}" in BOTH English and Arabic.
                 Context: ${promptContext || "General comprehensive review"}
                 
                 Requirements:
                 1. Generate at least 20 high-quality questions.
                 2. Mix Multiple Choice (MCQ) and Short Answer (SHORT) types (~50/50 split).
                 3. Structure:
-                   - For MCQ: { "type": "MCQ", "question": "...", "options": ["..."], "correctIndex": 0 }
-                   - For SHORT: { "type": "SHORT", "question": "...", "correctAnswer": "Main Answer", "acceptedAnswers": ["Var1", "Var2"] }
+                   - For MCQ: { "type": "MCQ", "question": "...", "questionAr": "...", "options": ["..."], "optionsAr": ["..."], "correctIndex": 0 }
+                   - For SHORT: { "type": "SHORT", "question": "...", "questionAr": "...", "correctAnswer": "...", "correctAnswerAr": "...", "acceptedAnswers": ["..."] }
                 
                 Output strictly valid JSON array of questions.`;
         }
@@ -376,13 +380,19 @@ const AdminDashboard: React.FC = () => {
                     type: Type.OBJECT,
                     properties: {
                         summary: { type: Type.STRING },
+                        summaryAr: { type: Type.STRING },
                         topics: { type: Type.ARRAY, items: { type: Type.STRING } },
                         flashcards: {
                             type: Type.ARRAY,
                             items: {
                                 type: Type.OBJECT,
-                                properties: { question: { type: Type.STRING }, answer: { type: Type.STRING } },
-                                required: ['question', 'answer']
+                                properties: { 
+                                    question: { type: Type.STRING }, 
+                                    questionAr: { type: Type.STRING }, 
+                                    answer: { type: Type.STRING },
+                                    answerAr: { type: Type.STRING }
+                                },
+                                required: ['question', 'questionAr', 'answer', 'answerAr']
                             }
                         },
                         quiz: {
@@ -392,16 +402,19 @@ const AdminDashboard: React.FC = () => {
                                 properties: {
                                     type: { type: Type.STRING, enum: ["MCQ", "SHORT"] },
                                     question: { type: Type.STRING },
+                                    questionAr: { type: Type.STRING },
                                     options: { type: Type.ARRAY, items: { type: Type.STRING } },
+                                    optionsAr: { type: Type.ARRAY, items: { type: Type.STRING } },
                                     correctIndex: { type: Type.INTEGER },
                                     correctAnswer: { type: Type.STRING },
+                                    correctAnswerAr: { type: Type.STRING },
                                     acceptedAnswers: { type: Type.ARRAY, items: { type: Type.STRING } }
                                 },
-                                required: ['type', 'question']
+                                required: ['type', 'question', 'questionAr']
                             }
                         }
                     },
-                    required: ['summary', 'topics', 'flashcards', 'quiz']
+                    required: ['summary', 'summaryAr', 'topics', 'flashcards', 'quiz']
                 };
             } else {
                  config.responseSchema = {
@@ -411,12 +424,15 @@ const AdminDashboard: React.FC = () => {
                         properties: {
                             type: { type: Type.STRING, enum: ["MCQ", "SHORT"] },
                             question: { type: Type.STRING },
+                            questionAr: { type: Type.STRING },
                             options: { type: Type.ARRAY, items: { type: Type.STRING } },
+                            optionsAr: { type: Type.ARRAY, items: { type: Type.STRING } },
                             correctIndex: { type: Type.INTEGER },
                             correctAnswer: { type: Type.STRING },
+                            correctAnswerAr: { type: Type.STRING },
                             acceptedAnswers: { type: Type.ARRAY, items: { type: Type.STRING } }
                         },
-                        required: ['type', 'question']
+                        required: ['type', 'question', 'questionAr']
                     }
                 };
             }
@@ -449,6 +465,7 @@ const AdminDashboard: React.FC = () => {
             const updatedLecture = {
                 ...newSubs[activeSubjectIdx].lectures[activeLectureIdx],
                 summary: data.summary || "",
+                summaryAr: data.summaryAr || "",
                 topics: Array.isArray(data.topics) ? data.topics : [],
                 flashcards: Array.isArray(data.flashcards) ? data.flashcards : [],
                 quiz: (Array.isArray(data.quiz) ? data.quiz : []).map((q: any, i: number) => ({ ...q, id: Date.now() + i }))
@@ -477,6 +494,147 @@ const AdminDashboard: React.FC = () => {
     } catch (err: any) {
         console.error("AI Generation Error:", err);
         setMsg({ type: 'error', text: 'AI Generation failed: ' + err.message });
+    } finally {
+        setGeneratingAI(false);
+    }
+  };
+
+  const translateContentWithAI = async (target: 'LECTURE' | 'BANK' = 'LECTURE') => {
+    const subject = subjects[activeSubjectIdx];
+    const lecture = subject.lectures[activeLectureIdx];
+    
+    setGeneratingAI(true);
+    setMsg({ type: 'info', text: 'AI is translating content to Arabic...' });
+
+    try {
+        const ai = new GoogleGenAI({ apiKey: (process as any).env.API_KEY });
+        
+        let systemPrompt = "";
+        if (target === 'LECTURE') {
+            systemPrompt = `Translate the following university lecture content from English to Arabic.
+                Maintain the Markdown formatting for the summary.
+                Ensure the translation is accurate and uses appropriate academic terminology.
+                
+                Content to translate:
+                1. Summary: ${lecture.summary}
+                2. Flashcards: ${JSON.stringify(lecture.flashcards.map(f => ({ question: f.question, answer: f.answer })))}
+                3. Quiz: ${JSON.stringify(lecture.quiz?.map(q => ({ 
+                    type: q.type, 
+                    question: q.question, 
+                    options: q.options, 
+                    correctAnswer: q.correctAnswer 
+                })))}
+                
+                Output strictly valid JSON with these fields:
+                - summaryAr: string (Markdown)
+                - flashcardsAr: array of { questionAr: string, answerAr: string }
+                - quizAr: array of { questionAr: string, optionsAr: string[], correctAnswerAr: string }
+                
+                The order of flashcards and quiz questions MUST match the input.`;
+        } else {
+            systemPrompt = `Translate the following subject question bank from English to Arabic.
+                Ensure the translation is accurate and uses appropriate academic terminology.
+                
+                Questions to translate:
+                ${JSON.stringify(subject.questionBank?.map(q => ({ 
+                    type: q.type, 
+                    question: q.question, 
+                    options: q.options, 
+                    correctAnswer: q.correctAnswer 
+                })))}
+                
+                Output strictly valid JSON array of objects with these fields:
+                - questionAr: string
+                - optionsAr: string[] (if MCQ)
+                - correctAnswerAr: string
+                
+                The order MUST match the input.`;
+        }
+
+        const response = await ai.models.generateContent({
+            model: 'gemini-3-flash-preview',
+            contents: systemPrompt,
+            config: {
+                responseMimeType: "application/json",
+                responseSchema: target === 'LECTURE' ? {
+                    type: Type.OBJECT,
+                    properties: {
+                        summaryAr: { type: Type.STRING },
+                        flashcardsAr: {
+                            type: Type.ARRAY,
+                            items: {
+                                type: Type.OBJECT,
+                                properties: { questionAr: { type: Type.STRING }, answerAr: { type: Type.STRING } },
+                                required: ['questionAr', 'answerAr']
+                            }
+                        },
+                        quizAr: {
+                            type: Type.ARRAY,
+                            items: {
+                                type: Type.OBJECT,
+                                properties: {
+                                    questionAr: { type: Type.STRING },
+                                    optionsAr: { type: Type.ARRAY, items: { type: Type.STRING } },
+                                    correctAnswerAr: { type: Type.STRING }
+                                },
+                                required: ['questionAr']
+                            }
+                        }
+                    },
+                    required: ['summaryAr', 'flashcardsAr', 'quizAr']
+                } : {
+                    type: Type.ARRAY,
+                    items: {
+                        type: Type.OBJECT,
+                        properties: {
+                            questionAr: { type: Type.STRING },
+                            optionsAr: { type: Type.ARRAY, items: { type: Type.STRING } },
+                            correctAnswerAr: { type: Type.STRING }
+                        },
+                        required: ['questionAr']
+                    }
+                }
+            }
+        });
+
+        const data = JSON.parse(response.text || (target === 'LECTURE' ? "{}" : "[]"));
+        
+        const newSubs = [...subjects];
+        
+        if (target === 'LECTURE') {
+            const currentLecture = newSubs[activeSubjectIdx].lectures[activeLectureIdx];
+            const updatedLecture = {
+                ...currentLecture,
+                summaryAr: data.summaryAr || currentLecture.summaryAr,
+                flashcards: currentLecture.flashcards.map((f, i) => ({
+                    ...f,
+                    questionAr: data.flashcardsAr?.[i]?.questionAr || f.questionAr,
+                    answerAr: data.flashcardsAr?.[i]?.answerAr || f.answerAr
+                })),
+                quiz: currentLecture.quiz?.map((q, i) => ({
+                    ...q,
+                    questionAr: data.quizAr?.[i]?.questionAr || q.questionAr,
+                    optionsAr: data.quizAr?.[i]?.optionsAr || q.optionsAr,
+                    correctAnswerAr: data.quizAr?.[i]?.correctAnswerAr || q.correctAnswerAr
+                }))
+            };
+            newSubs[activeSubjectIdx].lectures[activeLectureIdx] = updatedLecture;
+        } else {
+            const currentBank = newSubs[activeSubjectIdx].questionBank || [];
+            newSubs[activeSubjectIdx].questionBank = currentBank.map((q, i) => ({
+                ...q,
+                questionAr: data[i]?.questionAr || q.questionAr,
+                optionsAr: data[i]?.optionsAr || q.optionsAr,
+                correctAnswerAr: data[i]?.correctAnswerAr || q.correctAnswerAr
+            }));
+        }
+
+        setSubjects(newSubs);
+        setMsg({ type: 'success', text: 'Content translated successfully!' });
+
+    } catch (err: any) {
+        console.error("AI Translation Error:", err);
+        setMsg({ type: 'error', text: 'AI Translation failed: ' + err.message });
     } finally {
         setGeneratingAI(false);
     }
@@ -839,6 +997,13 @@ const AdminDashboard: React.FC = () => {
                             >
                                 <Wand2 size={16} /> AI Gen
                             </button>
+                            <button 
+                                onClick={() => translateContentWithAI('BANK')}
+                                disabled={generatingAI}
+                                className="flex items-center gap-2 px-3 py-1.5 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200"
+                            >
+                                <Languages size={16} /> AI Translate
+                            </button>
                              <button 
                                 onClick={() => fileInputRef.current?.click()}
                                 disabled={generatingAI}
@@ -864,8 +1029,9 @@ const AdminDashboard: React.FC = () => {
                                         <option value="MCQ">MCQ</option>
                                         <option value="SHORT">Short Answer</option>
                                     </select>
-                                    <div className="flex-1 space-y-1">
-                                        <input value={q.question} onChange={(e) => updateBankQuestion(qIdx, 'question', e.target.value)} placeholder="Question" className="w-full p-2 text-sm border rounded bg-gray-50 dark:bg-gray-900 dark:border-gray-600 font-medium" />
+                                    <div className="flex-1 space-y-2">
+                                        <input value={q.question} onChange={(e) => updateBankQuestion(qIdx, 'question', e.target.value)} placeholder="Question (EN)" className="w-full p-2 text-sm border rounded bg-gray-50 dark:bg-gray-900 dark:border-gray-600 font-medium" />
+                                        <input value={q.questionAr || ''} onChange={(e) => updateBankQuestion(qIdx, 'questionAr', e.target.value)} placeholder="السؤال (AR)" className="w-full p-2 text-sm border rounded bg-gray-50 dark:bg-gray-900 dark:border-gray-600 font-medium text-right" dir="rtl" />
                                         <select
                                              value={q.lectureId || ""}
                                              onChange={(e) => updateBankQuestion(qIdx, 'lectureId', e.target.value || undefined)}
@@ -882,13 +1048,22 @@ const AdminDashboard: React.FC = () => {
                                 
                                 {q.type === 'SHORT' ? (
                                     <div className="space-y-2 pl-2 border-l-2 border-purple-200">
-                                        <input 
-                                            value={q.correctAnswer || ''} 
-                                            onChange={(e) => updateBankQuestion(qIdx, 'correctAnswer', e.target.value)}
-                                            placeholder="Main Correct Answer" 
-                                            className="w-full p-2 text-sm border border-green-300 rounded bg-green-50 dark:bg-green-900/10 text-gray-900 dark:text-gray-100"
-                                        />
-                                        <div className="text-xs text-gray-500">Accepted Variations (comma separated for display, handled as array):</div>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                                            <input 
+                                                value={q.correctAnswer || ''} 
+                                                onChange={(e) => updateBankQuestion(qIdx, 'correctAnswer', e.target.value)}
+                                                placeholder="Correct Answer (EN)" 
+                                                className="w-full p-2 text-sm border border-green-300 rounded bg-green-50 dark:bg-green-900/10 text-gray-900 dark:text-gray-100"
+                                            />
+                                            <input 
+                                                value={q.correctAnswerAr || ''} 
+                                                onChange={(e) => updateBankQuestion(qIdx, 'correctAnswerAr', e.target.value)}
+                                                placeholder="الإجابة الصحيحة (AR)" 
+                                                className="w-full p-2 text-sm border border-green-300 rounded bg-green-50 dark:bg-green-900/10 text-gray-900 dark:text-gray-100 text-right"
+                                                dir="rtl"
+                                            />
+                                        </div>
+                                        <div className="text-xs text-gray-500">Accepted Variations (EN):</div>
                                         <input 
                                             value={q.acceptedAnswers?.join(', ') || ''}
                                             onChange={(e) => updateBankQuestion(qIdx, 'acceptedAnswers', e.target.value.split(',').map(s => s.trim()))}
@@ -897,21 +1072,51 @@ const AdminDashboard: React.FC = () => {
                                         />
                                     </div>
                                 ) : (
-                                    <div className="grid grid-cols-2 gap-2 mb-3">
-                                        {q.options?.map((opt, oIdx) => (
-                                            <div key={oIdx} className="relative">
-                                                <input 
-                                                    value={opt} 
-                                                    onChange={(e) => updateBankQuestion(qIdx, 'option', e.target.value, oIdx)} 
-                                                    placeholder={`Option ${oIdx+1}`} 
-                                                    className={`w-full p-2 pl-8 text-sm border rounded bg-gray-50 dark:bg-gray-900 ${q.correctIndex === oIdx ? 'border-green-500 ring-1 ring-green-500' : 'dark:border-gray-600'}`} 
-                                                />
-                                                <button 
-                                                    onClick={() => updateBankQuestion(qIdx, 'correctIndex', oIdx)}
-                                                    className={`absolute left-2 top-2.5 w-4 h-4 rounded-full border ${q.correctIndex === oIdx ? 'bg-green-500 border-green-600' : 'bg-gray-100 dark:bg-gray-700 border-gray-300 dark:border-gray-500'}`}
-                                                />
+                                    <div className="space-y-3">
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                            <div className="space-y-2">
+                                                <p className="text-[10px] font-bold text-gray-400 uppercase">Options (EN)</p>
+                                                {q.options?.map((opt, oIdx) => (
+                                                    <div key={oIdx} className="relative">
+                                                        <input 
+                                                            value={opt} 
+                                                            onChange={(e) => updateBankQuestion(qIdx, 'option', e.target.value, oIdx)} 
+                                                            placeholder={`Option ${oIdx+1} (EN)`} 
+                                                            className={`w-full p-2 pl-8 text-sm border rounded bg-gray-50 dark:bg-gray-900 ${q.correctIndex === oIdx ? 'border-green-500 ring-1 ring-green-500' : 'dark:border-gray-600'}`} 
+                                                        />
+                                                        <button 
+                                                            onClick={() => updateBankQuestion(qIdx, 'correctIndex', oIdx)}
+                                                            className={`absolute left-2 top-2.5 w-4 h-4 rounded-full border ${q.correctIndex === oIdx ? 'bg-green-500 border-green-600' : 'bg-gray-100 dark:bg-gray-700 border-gray-300 dark:border-gray-500'}`}
+                                                        />
+                                                    </div>
+                                                ))}
                                             </div>
-                                        ))}
+                                            <div className="space-y-2">
+                                                <p className="text-[10px] font-bold text-gray-400 uppercase text-right">Options (AR)</p>
+                                                {q.optionsAr?.map((opt, oIdx) => (
+                                                    <div key={oIdx} className="relative">
+                                                        <input 
+                                                            value={opt} 
+                                                            onChange={(e) => {
+                                                                const opts = [...(q.optionsAr || ['', '', '', ''])];
+                                                                opts[oIdx] = e.target.value;
+                                                                updateBankQuestion(qIdx, 'optionsAr', opts);
+                                                            }} 
+                                                            placeholder={`الخيار ${oIdx+1} (AR)`} 
+                                                            className="w-full p-2 pr-4 text-sm border rounded bg-gray-50 dark:bg-gray-900 dark:border-gray-600 text-right"
+                                                            dir="rtl"
+                                                        />
+                                                    </div>
+                                                )) || (
+                                                    <button 
+                                                        onClick={() => updateBankQuestion(qIdx, 'optionsAr', ['', '', '', ''])}
+                                                        className="w-full p-2 text-xs border border-dashed rounded text-gray-400 hover:text-blue-500 hover:border-blue-500"
+                                                    >
+                                                        + Add Arabic Options
+                                                    </button>
+                                                )}
+                                            </div>
+                                        </div>
                                     </div>
                                 )}
                             </div>
@@ -1103,6 +1308,14 @@ const AdminDashboard: React.FC = () => {
                             AI Magic
                         </button>
                         <button 
+                            onClick={() => translateContentWithAI('LECTURE')}
+                            disabled={generatingAI}
+                            className="flex items-center gap-2 px-4 py-1.5 bg-gradient-to-r from-blue-500 to-indigo-600 text-white rounded-lg hover:from-blue-600 hover:to-indigo-700 transition-all shadow-md hover:shadow-lg disabled:opacity-50"
+                        >
+                            {generatingAI ? <Sparkles size={16} className="animate-spin" /> : <Languages size={16} />}
+                            AI Translate
+                        </button>
+                        <button 
                             onClick={handleAIContentGenFromTopic}
                             disabled={generatingAI}
                             className="flex items-center gap-2 px-4 py-1.5 bg-gradient-to-r from-emerald-600 to-teal-600 text-white rounded-lg hover:from-emerald-700 hover:to-teal-700 transition-all shadow-md hover:shadow-lg disabled:opacity-50"
@@ -1173,20 +1386,32 @@ const AdminDashboard: React.FC = () => {
                              <label className="block text-xs font-medium text-gray-500 mb-1">Topics (comma separated)</label>
                              <input value={lecture.topics?.join(', ')} onChange={(e) => updateLecture('topics', e.target.value.split(',').map(s => s.trim()))} className="w-full p-2 border rounded-lg bg-transparent dark:border-gray-600" />
                         </div>
-                        <div>
-                            <label className="block text-xs font-medium text-gray-500 mb-1">Summary (Markdown Supported)</label>
-                            <textarea 
-                                value={lecture.summary} 
-                                onChange={(e) => updateLecture('summary', e.target.value)} 
-                                placeholder="# Main Point&#10;- Sub point&#10;**Bold text**" 
-                                className="w-full h-72 p-4 border rounded-lg bg-transparent dark:border-gray-600 font-mono text-sm leading-relaxed" 
-                            />
-                            <div className="flex gap-4 mt-2 text-[10px] text-gray-400 font-mono uppercase tracking-widest">
-                                <span># Header</span>
-                                <span>- List</span>
-                                <span>**Bold**</span>
-                                <span>*Italic*</span>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label className="block text-xs font-medium text-gray-500 mb-1">Summary (EN - Markdown)</label>
+                                <textarea 
+                                    value={lecture.summary} 
+                                    onChange={(e) => updateLecture('summary', e.target.value)} 
+                                    placeholder="# Main Point&#10;- Sub point&#10;**Bold text**" 
+                                    className="w-full h-72 p-4 border rounded-lg bg-transparent dark:border-gray-600 font-mono text-sm leading-relaxed" 
+                                />
                             </div>
+                            <div>
+                                <label className="block text-xs font-medium text-gray-500 mb-1 text-right">Summary (AR - Markdown)</label>
+                                <textarea 
+                                    value={lecture.summaryAr || ''} 
+                                    onChange={(e) => updateLecture('summaryAr', e.target.value)} 
+                                    placeholder="# النقطة الرئيسية&#10;- نقطة فرعية&#10;**نص عريض**" 
+                                    className="w-full h-72 p-4 border rounded-lg bg-transparent dark:border-gray-600 font-mono text-sm leading-relaxed text-right" 
+                                    dir="rtl"
+                                />
+                            </div>
+                        </div>
+                        <div className="flex gap-4 mt-2 text-[10px] text-gray-400 font-mono uppercase tracking-widest">
+                            <span># Header</span>
+                            <span>- List</span>
+                            <span>**Bold**</span>
+                            <span>*Italic*</span>
                         </div>
                     </div>
 
@@ -1300,12 +1525,18 @@ const AdminDashboard: React.FC = () => {
                             <h3 className="font-semibold flex items-center gap-2 text-gray-900 dark:text-white"><Layers size={18}/> Flashcards</h3>
                             <button onClick={addFlashcard} className="text-xs bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 px-3 py-1 rounded hover:bg-blue-100 transition-colors">+ Add Manual</button>
                         </div>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div className="grid grid-cols-1 gap-4">
                             {lecture.flashcards?.map((card, idx) => (
                                 <div key={idx} className="flex gap-2 items-start p-4 bg-gray-50 dark:bg-gray-900/50 rounded-lg border border-gray-100 dark:border-gray-700 group">
-                                    <div className="flex-1 space-y-2">
-                                        <textarea value={card.question} onChange={(e) => updateFlashcard(idx, 'question', e.target.value)} placeholder="Question" className="w-full p-1.5 text-sm border rounded bg-white dark:bg-gray-800 dark:border-gray-600 resize-none h-16" />
-                                        <textarea value={card.answer} onChange={(e) => updateFlashcard(idx, 'answer', e.target.value)} placeholder="Answer" className="w-full p-1.5 text-sm border rounded bg-white dark:bg-gray-800 dark:border-gray-600 resize-none h-16" />
+                                    <div className="flex-1 space-y-3">
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                                            <textarea value={card.question} onChange={(e) => updateFlashcard(idx, 'question', e.target.value)} placeholder="Question (EN)" className="w-full p-1.5 text-sm border rounded bg-white dark:bg-gray-800 dark:border-gray-600 resize-none h-20" />
+                                            <textarea value={card.questionAr || ''} onChange={(e) => updateFlashcard(idx, 'questionAr', e.target.value)} placeholder="السؤال (AR)" className="w-full p-1.5 text-sm border rounded bg-white dark:bg-gray-800 dark:border-gray-600 resize-none h-20 text-right" dir="rtl" />
+                                        </div>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                                            <textarea value={card.answer} onChange={(e) => updateFlashcard(idx, 'answer', e.target.value)} placeholder="Answer (EN)" className="w-full p-1.5 text-sm border rounded bg-white dark:bg-gray-800 dark:border-gray-600 resize-none h-20" />
+                                            <textarea value={card.answerAr || ''} onChange={(e) => updateFlashcard(idx, 'answerAr', e.target.value)} placeholder="الإجابة (AR)" className="w-full p-1.5 text-sm border rounded bg-white dark:bg-gray-800 dark:border-gray-600 resize-none h-20 text-right" dir="rtl" />
+                                        </div>
                                     </div>
                                     <button onClick={() => deleteFlashcard(idx)} className="text-red-400 hover:text-red-600 p-1 opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 size={16} /></button>
                                 </div>
@@ -1331,19 +1562,31 @@ const AdminDashboard: React.FC = () => {
                                             <option value="MCQ">MCQ</option>
                                             <option value="SHORT">Short</option>
                                         </select>
-                                        <input value={q.question} onChange={(e) => updateQuizQ(qIdx, 'question', e.target.value)} placeholder="Question" className="flex-1 p-2 text-sm border rounded bg-white dark:bg-gray-800 dark:border-gray-600 font-medium" />
+                                        <div className="flex-1 space-y-2">
+                                            <input value={q.question} onChange={(e) => updateQuizQ(qIdx, 'question', e.target.value)} placeholder="Question (EN)" className="w-full p-2 text-sm border rounded bg-white dark:bg-gray-800 dark:border-gray-600 font-medium" />
+                                            <input value={q.questionAr || ''} onChange={(e) => updateQuizQ(qIdx, 'questionAr', e.target.value)} placeholder="السؤال (AR)" className="w-full p-2 text-sm border rounded bg-white dark:bg-gray-800 dark:border-gray-600 font-medium text-right" dir="rtl" />
+                                        </div>
                                         <button onClick={() => deleteQuizQ(qIdx)} className="text-red-400 hover:text-red-600 p-1"><Trash2 size={16} /></button>
                                     </div>
                                     
                                     {q.type === 'SHORT' ? (
                                         <div className="space-y-2 pl-2 border-l-2 border-purple-200">
-                                            <input 
-                                                value={q.correctAnswer || ''} 
-                                                onChange={(e) => updateQuizQ(qIdx, 'correctAnswer', e.target.value)}
-                                                placeholder="Main Correct Answer" 
-                                                className="w-full p-2 text-sm border border-green-300 rounded bg-green-50 dark:bg-green-900/10 text-gray-900 dark:text-gray-100"
-                                            />
-                                            <div className="text-xs text-gray-500">Accepted Variations:</div>
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                                                <input 
+                                                    value={q.correctAnswer || ''} 
+                                                    onChange={(e) => updateQuizQ(qIdx, 'correctAnswer', e.target.value)}
+                                                    placeholder="Correct Answer (EN)" 
+                                                    className="w-full p-2 text-sm border border-green-300 rounded bg-green-50 dark:bg-green-900/10 text-gray-900 dark:text-gray-100"
+                                                />
+                                                <input 
+                                                    value={q.correctAnswerAr || ''} 
+                                                    onChange={(e) => updateQuizQ(qIdx, 'correctAnswerAr', e.target.value)}
+                                                    placeholder="الإجابة الصحيحة (AR)" 
+                                                    className="w-full p-2 text-sm border border-green-300 rounded bg-green-50 dark:bg-green-900/10 text-gray-900 dark:text-gray-100 text-right"
+                                                    dir="rtl"
+                                                />
+                                            </div>
+                                            <div className="text-xs text-gray-500">Accepted Variations (EN):</div>
                                             <input 
                                                 value={q.acceptedAnswers?.join(', ') || ''}
                                                 onChange={(e) => updateQuizQ(qIdx, 'acceptedAnswers', e.target.value.split(',').map(s => s.trim()))}
@@ -1352,21 +1595,51 @@ const AdminDashboard: React.FC = () => {
                                             />
                                         </div>
                                     ) : (
-                                        <div className="grid grid-cols-2 gap-2 mb-3">
-                                            {q.options?.map((opt, oIdx) => (
-                                                <div key={oIdx} className="relative">
-                                                    <input 
-                                                        value={opt} 
-                                                        onChange={(e) => updateQuizQ(qIdx, 'option', e.target.value, oIdx)} 
-                                                        placeholder={`Option ${oIdx+1}`} 
-                                                        className={`w-full p-2 pl-8 text-sm border rounded bg-white dark:bg-gray-800 ${q.correctIndex === oIdx ? 'border-green-500 ring-1 ring-green-500' : 'dark:border-gray-600'}`} 
-                                                    />
-                                                    <button 
-                                                        onClick={() => updateQuizQ(qIdx, 'correctIndex', oIdx)}
-                                                        className={`absolute left-2 top-2.5 w-4 h-4 rounded-full border ${q.correctIndex === oIdx ? 'bg-green-500 border-green-600' : 'bg-gray-100 dark:bg-gray-700 border-gray-300 dark:border-gray-500'}`}
-                                                    />
+                                        <div className="space-y-3">
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                <div className="space-y-2">
+                                                    <p className="text-[10px] font-bold text-gray-400 uppercase">Options (EN)</p>
+                                                    {q.options?.map((opt, oIdx) => (
+                                                        <div key={oIdx} className="relative">
+                                                            <input 
+                                                                value={opt} 
+                                                                onChange={(e) => updateQuizQ(qIdx, 'option', e.target.value, oIdx)} 
+                                                                placeholder={`Option ${oIdx+1} (EN)`} 
+                                                                className={`w-full p-2 pl-8 text-sm border rounded bg-white dark:bg-gray-800 ${q.correctIndex === oIdx ? 'border-green-500 ring-1 ring-green-500' : 'dark:border-gray-600'}`} 
+                                                            />
+                                                            <button 
+                                                                onClick={() => updateQuizQ(qIdx, 'correctIndex', oIdx)}
+                                                                className={`absolute left-2 top-2.5 w-4 h-4 rounded-full border ${q.correctIndex === oIdx ? 'bg-green-500 border-green-600' : 'bg-gray-100 dark:bg-gray-700 border-gray-300 dark:border-gray-500'}`}
+                                                            />
+                                                        </div>
+                                                    ))}
                                                 </div>
-                                            ))}
+                                                <div className="space-y-2">
+                                                    <p className="text-[10px] font-bold text-gray-400 uppercase text-right">Options (AR)</p>
+                                                    {q.optionsAr?.map((opt, oIdx) => (
+                                                        <div key={oIdx} className="relative">
+                                                            <input 
+                                                                value={opt} 
+                                                                onChange={(e) => {
+                                                                    const opts = [...(q.optionsAr || ['', '', '', ''])];
+                                                                    opts[oIdx] = e.target.value;
+                                                                    updateQuizQ(qIdx, 'optionsAr', opts);
+                                                                }} 
+                                                                placeholder={`الخيار ${oIdx+1} (AR)`} 
+                                                                className="w-full p-2 pr-4 text-sm border rounded bg-white dark:bg-gray-800 dark:border-gray-600 text-right"
+                                                                dir="rtl"
+                                                            />
+                                                        </div>
+                                                    )) || (
+                                                        <button 
+                                                            onClick={() => updateQuizQ(qIdx, 'optionsAr', ['', '', '', ''])}
+                                                            className="w-full p-2 text-xs border border-dashed rounded text-gray-400 hover:text-blue-500 hover:border-blue-500"
+                                                        >
+                                                            + Add Arabic Options
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            </div>
                                         </div>
                                     )}
                                 </div>

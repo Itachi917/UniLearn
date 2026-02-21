@@ -3,19 +3,25 @@ export type Language = 'en' | 'ar';
 
 export interface Flashcard {
   question: string;
+  questionAr?: string;
   answer: string;
+  answerAr?: string;
 }
 
 export interface QuizQuestion {
   id: number;
   type: 'MCQ' | 'SHORT'; 
   question: string;
+  questionAr?: string;
   // For MCQ
   options?: string[];
+  optionsAr?: string[];
   correctIndex?: number;
   // For Short Answer
   correctAnswer?: string; // The display answer
+  correctAnswerAr?: string;
   acceptedAnswers?: string[]; // Variations for auto-marking
+  acceptedAnswersAr?: string[];
   // Metadata
   lectureId?: string; // To link specific questions to lectures within the subject bank
 }
@@ -35,6 +41,7 @@ export interface Lecture {
   title: string;
   titleAr: string;
   summary: string;
+  summaryAr?: string;
   flashcards: Flashcard[];
   quiz?: QuizQuestion[];
   topics?: string[];

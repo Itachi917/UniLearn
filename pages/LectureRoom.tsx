@@ -287,7 +287,7 @@ const LectureRoom: React.FC = () => {
         <div className="min-h-[400px]">
             {activeTab === 'summary' && (
                 <div className="bg-card dark:bg-gray-800 rounded-2xl p-8 shadow-sm border border-gray-200 dark:border-gray-700 prose dark:prose-invert max-w-none">
-                    <ReactMarkdown>{lecture.summary}</ReactMarkdown>
+                    <ReactMarkdown>{(language === 'ar' && lecture.summaryAr) ? lecture.summaryAr : lecture.summary}</ReactMarkdown>
                     
                     {lecture.topics && (
                         <div className="mt-8 pt-6 border-t border-gray-100 dark:border-gray-700">
