@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import Navbar from '../components/layout/Navbar';
 import { useApp } from '../context/AppContext';
 import { supabase } from '../lib/supabase';
-import { Save, Plus, Trash2, Edit, ArrowLeft, Layers, Book, BrainCircuit, Users, Database, FileJson, Check, X, AlertCircle, Sparkles, Wand2, MessageSquarePlus, UploadCloud, FileText, MessageSquare, Library, Image as ImageIcon, Video, Network } from 'lucide-react';
+import { Save, Plus, Trash2, Edit, ArrowLeft, Layers, Book, BrainCircuit, Users, Database, FileJson, Check, X, AlertCircle, Sparkles, Wand2, MessageSquarePlus, UploadCloud, FileText, MessageSquare, Library, Image as ImageIcon, Video, Network, Languages } from 'lucide-react';
 import { Subject, Lecture, Flashcard, QuizQuestion, FlashcardSuggestion, LectureMedia, MediaType } from '../types';
 import { GoogleGenAI, Type } from '@google/genai';
 import MindMapRenderer from '../components/ui/MindMapRenderer';
@@ -873,6 +873,9 @@ const AdminDashboard: React.FC = () => {
   );
 
   const renderSubjectEdit = () => {
+    if (activeSubjectIdx === -1 || !subjects[activeSubjectIdx]) {
+        return <div className="p-8 text-center text-gray-500">Subject not found.</div>;
+    }
     const subject = subjects[activeSubjectIdx];
 
     // Helper for Question Bank
@@ -1208,6 +1211,9 @@ const AdminDashboard: React.FC = () => {
   };
 
   const renderLectureEdit = () => {
+    if (activeSubjectIdx === -1 || activeLectureIdx === -1 || !subjects[activeSubjectIdx] || !subjects[activeSubjectIdx].lectures[activeLectureIdx]) {
+        return <div className="p-8 text-center text-gray-500">Lecture not found.</div>;
+    }
     const lecture = subjects[activeSubjectIdx].lectures[activeLectureIdx];
 
     const updateLecture = (field: keyof Lecture, value: any) => {
@@ -1726,7 +1732,6 @@ const AdminDashboard: React.FC = () => {
                       <thead className="bg-gray-50 dark:bg-gray-900/50 text-gray-500 font-medium">
                           <tr>
                               <th className="px-6 py-4">Student</th>
-                              <th className="px-6 py-4">Password (Admin View)</th>
                               <th className="px-6 py-4">Completed</th>
                               <th className="px-6 py-4">Quiz Points</th>
                               <th className="px-6 py-4">Last Active</th>
@@ -1734,9 +1739,9 @@ const AdminDashboard: React.FC = () => {
                       </thead>
                       <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
                           {loadingStudents ? (
-                              <tr><td colSpan={5} className="px-6 py-8 text-center text-gray-500">Loading data...</td></tr>
+                              <tr><td colSpan={4} className="px-6 py-8 text-center text-gray-500">Loading data...</td></tr>
                           ) : students.length === 0 ? (
-                              <tr><td colSpan={5} className="px-6 py-8 text-center text-gray-500">No students found.</td></tr>
+                              <tr><td colSpan={4} className="px-6 py-8 text-center text-gray-500">No students found.</td></tr>
                           ) : (
                               students.map(std => (
                                   <tr key={std.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
@@ -1754,9 +1759,6 @@ const AdminDashboard: React.FC = () => {
                                                   <div className="text-xs text-gray-500">{std.email}</div>
                                               </div>
                                           </div>
-                                      </td>
-                                      <td className="px-6 py-4 font-mono text-xs text-gray-500 select-all">
-                                          {std.password_text}
                                       </td>
                                       <td className="px-6 py-4">
                                           <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300">
@@ -1890,8 +1892,8 @@ const AdminDashboard: React.FC = () => {
             
             <div className="flex-1">
                 {view === 'SUBJECT_LIST' && renderSubjectList()}
-                {view === 'SUBJECT_EDIT' && activeSubjectIdx !== -1 && renderSubjectEdit()}
-                {view === 'LECTURE_EDIT' && activeLectureIdx !== -1 && renderLectureEdit()}
+                {view === 'SUBJECT_EDIT' && activeSubjectIdx !== -1 && subjects[activeSubjectIdx] && renderSubjectEdit()}
+                {view === 'LECTURE_EDIT' && activeSubjectIdx !== -1 && activeLectureIdx !== -1 && subjects[activeSubjectIdx] && subjects[activeSubjectIdx].lectures[activeLectureIdx] && renderLectureEdit()}
                 {view === 'STUDENT_LIST' && renderStudentList()}
                 {view === 'SUGGESTIONS' && renderSuggestionsList()}
             </div>

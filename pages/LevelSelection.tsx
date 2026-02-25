@@ -18,11 +18,29 @@ const LevelSelection: React.FC = () => {
             <h1 className="text-3xl md:text-4xl font-bold text-gray-900 dark:text-white mb-4">
                 {t('selectLevel')}
             </h1>
-            <p className="text-gray-600 dark:text-gray-400 max-w-2xl mx-auto">
+            <p className="text-gray-600 dark:text-gray-400 max-w-2xl mx-auto mb-6">
                 {language === 'ar' 
                  ? "اختر مستواك الأكاديمي للوصول إلى المواد والمحاضرات المناسبة."
                  : "Choose your academic level to access relevant subjects and lectures."}
             </p>
+
+            <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-700 rounded-lg p-4 max-w-2xl mx-auto">
+                <p className="text-sm text-yellow-800 dark:text-yellow-200 font-medium">
+                    {language === 'ar' 
+                        ? "هذا الموقع لا يزال نسخة تجريبية. لأي اقتراحات أو تعديلات، يرجى التواصل على: "
+                        : "This website is still a demo. For any suggestions or modifications, please contact: "}
+                    <span 
+                        onClick={() => {
+                            navigator.clipboard.writeText('95292122');
+                            alert('Number copied to clipboard!');
+                        }}
+                        className="text-blue-600 dark:text-blue-400 font-bold cursor-pointer hover:underline ml-1"
+                        title="Click to copy"
+                    >
+                        95292122
+                    </span>
+                </p>
+            </div>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
