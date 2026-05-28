@@ -4,7 +4,7 @@ import { useApp } from '../context/AppContext';
 import { Link } from 'react-router-dom';
 import { ChevronRight, Layers, Trophy, Flame } from 'lucide-react';
 
-const levels = ['Level-1', 'Level-2', 'Level-3', 'Level-4'];
+const levels = ['Level-1', 'Level-2', 'Level-3', 'Level-4', 'Unir'];
 
 const LevelSelection: React.FC = () => {
   const { t, language, subjects } = useApp();
@@ -43,7 +43,7 @@ const LevelSelection: React.FC = () => {
             </div>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-6 mb-12">
           {levels.map((level, idx) => {
             // Check if there are any subjects for this level
             const hasSubjects = subjects.some(s => s.level === level);
@@ -68,7 +68,7 @@ const LevelSelection: React.FC = () => {
                 </div>
                 
                 <h3 className="text-xl font-bold text-gray-900 dark:text-white">
-                    {language === 'ar' ? t(`level${idx+1}` as any) : level.replace('-', ' ')}
+                    {level === 'Unir' ? t('unir' as any) : (language === 'ar' ? t(`level${idx+1}` as any) : level.replace('-', ' '))}
                 </h3>
                 
                 {isActive && (
