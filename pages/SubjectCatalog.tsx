@@ -85,7 +85,7 @@ const SubjectSelectionModal: React.FC<{
                                     {language === 'ar' ? sub.titleAr : sub.title}
                                 </h4>
                                 <span className={`text-xs px-2 py-0.5 rounded-full inline-block mt-1 bg-${sub.color}-100 text-${sub.color}-700 dark:bg-gray-700 dark:text-gray-300`}>
-                                    {sub.level.replace('-', ' ')}
+                                    {sub.level === 'Unir' ? t('unir' as any) : sub.level.replace('-', ' ')}
                                 </span>
                             </div>
                         </div>
@@ -131,7 +131,7 @@ const SubjectCatalog: React.FC = () => {
 
   // Filter subjects for the CURRENT LEVEL only
   const levelSubjects = subjects.filter(s => s.level === currentLevel);
-  const levelName = currentLevel.replace('-', ' ');
+  const levelName = currentLevel === 'Unir' ? t('unir' as any) : currentLevel.replace('-', ' ');
 
   // Get enrolled IDs that belong to THIS level
   const enrolledIds = progress.enrolledSubjectIds || [];
@@ -291,7 +291,7 @@ const SubjectCatalog: React.FC = () => {
                                     {subject.lectures.length} {t('lectures')}
                                 </p>
                                 <span className="text-xs font-medium px-2 py-0.5 bg-gray-100 dark:bg-gray-700 rounded text-gray-500 dark:text-gray-400">
-                                    {subject.level.replace('-', ' ')}
+                                    {subject.level === 'Unir' ? t('unir' as any) : subject.level.replace('-', ' ')}
                                 </span>
                             </div>
                         </div>
