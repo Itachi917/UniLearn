@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { User, UserProgress, Language, Subject, AppTheme, FlashcardSuggestion } from '../types';
-import { TRANSLATIONS, SEED_DATA, APP_THEMES } from '../constants';
+import { TRANSLATIONS, APP_THEMES } from '../constants';
 import { supabase } from '../lib/supabase';
 
 interface AppContextType {
@@ -52,7 +52,7 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
     lastStudyDate: '',
     totalStudyMinutes: 0
   });
-  const [subjects, setSubjects] = useState<Subject[]>(SEED_DATA);
+  const [subjects, setSubjects] = useState<Subject[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   // Computed
@@ -114,7 +114,7 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
     setProgress({ 
         completedLectures: [], 
         quizScores: {},
-        enrolledSubjectIds: SEED_DATA.map(s => s.id),
+        enrolledSubjectIds: undefined,
         studyStreak: 1,
         totalStudyMinutes: 0
     });
