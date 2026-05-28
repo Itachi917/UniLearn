@@ -843,7 +843,7 @@ const AdminDashboard: React.FC = () => {
                                 <Book size={20} />
                             </div>
                             <span className="px-2 py-1 text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded">
-                                {sub.level.replace('-', ' ')}
+                                {sub.level === 'Unir' ? 'Unir (متطلب جامعي)' : sub.level.replace('-', ' ')}
                             </span>
                         </div>
                         <h3 className="font-bold text-lg text-gray-900 dark:text-white">{sub.title}</h3>
@@ -945,6 +945,7 @@ const AdminDashboard: React.FC = () => {
                             <option value="Level-2">Level 2</option>
                             <option value="Level-3">Level 3</option>
                             <option value="Level-4">Level 4</option>
+                            <option value="Unir">Unir (متطلب جامعي)</option>
                         </select>
                     </div>
                     <div>
