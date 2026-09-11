@@ -23,9 +23,10 @@ const AITutor: React.FC<Props> = ({ lecture, isOpen, onClose }) => {
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const [interactionId, setInteractionId] = useState<string | null>(null);
 
-  // Initialize Gemini SDK
-  const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_GEMINI_API_KEY || '' });
+  // Initialize Gemini SDK with env variable, falling back to the provided key
+  const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_GEMINI_API_KEY || 'AIzaSyCkoVKHYFUXNwmIKGN2LEyRFX4Tqy6SAhY' });
 
   useEffect(() => {
     // Scroll to bottom whenever messages change
@@ -78,28 +79,26 @@ LECTURE CONTEXT DATA:
 ${contextData}
 `;
 
-      // Format previous messages for the Gemini API (excluding the welcome message if we want to save tokens, but we can include it)
-      const apiMessages = messages.filter(m => m.id !== 'welcome').map(m => ({
-        role: m.role,
-        parts: [{ text: m.content }]
-      }));
-      
-      // Add the new user message
-      apiMessages.push({
-        role: 'user',
-        parts: [{ text: userMessage.content }]
-      });
-
-      const response = await ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
-        contents: apiMessages,
+      const requestPayload: any = {
+        model: 'gemini-3.8-flash',
+        input: userMessage.content,
         config: {
           systemInstruction: systemPrompt,
           temperature: 0.2, // Low temperature for factual RAG responses
         }
-      });
+      };
 
-      const botText = response.text || "I'm sorry, I couldn't generate a response.";
+      if (interactionId) {
+          requestPayload.previous_interaction_id = interactionId;
+      }
+
+      const response = await ai.interactions.create(requestPayload);
+
+      if (response.id) {
+          setInteractionId(response.id);
+      }
+
+      const botText = response.output_text || "I'm sorry, I couldn't generate a response.";
       
       const botMessage: ChatMessage = {
         id: (Date.now() + 1).toString(),
