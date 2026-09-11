@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { Flashcard as IFlashcard } from '../../types';
 import { RotateCw, Volume2 } from 'lucide-react';
+import { motion } from 'framer-motion';
 
 interface Props {
   data: IFlashcard;
@@ -35,43 +36,48 @@ const Flashcard: React.FC<Props> = ({ data, onNext }) => {
       className="relative w-full h-80 perspective-1000 cursor-pointer group"
       onClick={() => setIsFlipped(!isFlipped)}
     >
-      <div className={`relative w-full h-full duration-500 transform-style-3d transition-transform ${isFlipped ? 'rotate-y-180' : ''}`}>
+      <motion.div 
+        className="relative w-full h-full transform-style-3d"
+        initial={false}
+        animate={{ rotateY: isFlipped ? 180 : 0 }}
+        transition={{ type: "spring", stiffness: 260, damping: 20 }}
+      >
         
         {/* Front */}
-        <div className="absolute w-full h-full backface-hidden bg-card dark:bg-gray-800 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700 p-8 flex flex-col items-center justify-center text-center">
-          <div className="text-xs font-bold uppercase tracking-wider text-blue-500 mb-4">{language === 'ar' ? 'سؤال' : 'Question'}</div>
-          <p className="text-xl font-medium text-gray-900 dark:text-white flex-grow flex items-center">{question}</p>
-          <div className="absolute bottom-4 flex items-center justify-center w-full gap-4">
-             <button onClick={(e) => playTTS(e, question)} className="p-2 text-gray-400 hover:text-blue-500 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
-                <Volume2 size={18} />
+        <div className="absolute w-full h-full backface-hidden glass-card rounded-2xl p-8 flex flex-col items-center justify-center text-center">
+          <div className="text-xs font-bold uppercase tracking-widest text-indigo-500 dark:text-indigo-400 mb-4">{language === 'ar' ? 'سؤال' : 'Question'}</div>
+          <p className="text-2xl font-medium text-gray-900 dark:text-white flex-grow flex items-center">{question}</p>
+          <div className="absolute bottom-6 flex items-center justify-center w-full gap-4">
+             <button onClick={(e) => playTTS(e, question)} className="p-3 text-gray-400 hover:text-indigo-500 rounded-full hover:bg-indigo-50 dark:hover:bg-indigo-900/30 transition-colors">
+                <Volume2 size={20} />
              </button>
             <div className="text-sm text-gray-400 flex items-center gap-2">
-              <RotateCw size={14} />
+              <RotateCw size={16} />
               {t('flip')}
             </div>
           </div>
         </div>
 
         {/* Back */}
-        <div className="absolute w-full h-full backface-hidden rotate-y-180 bg-blue-50 dark:bg-blue-900/30 rounded-xl shadow-lg border border-blue-200 dark:border-blue-800 p-8 flex flex-col items-center justify-center text-center">
-          <div className="text-xs font-bold uppercase tracking-wider text-green-600 dark:text-green-400 mb-4">{language === 'ar' ? 'إجابة' : 'Answer'}</div>
-          <p className="text-lg text-gray-800 dark:text-gray-100 leading-relaxed flex-grow flex items-center">{answer}</p>
+        <div className="absolute w-full h-full backface-hidden rotate-y-180 bg-gradient-to-br from-indigo-50 to-purple-50 dark:from-indigo-900/40 dark:to-purple-900/40 rounded-2xl shadow-xl border border-indigo-100 dark:border-indigo-800/50 p-8 flex flex-col items-center justify-center text-center">
+          <div className="text-xs font-bold uppercase tracking-widest text-purple-600 dark:text-purple-400 mb-4">{language === 'ar' ? 'إجابة' : 'Answer'}</div>
+          <p className="text-xl text-gray-800 dark:text-gray-100 font-medium leading-relaxed flex-grow flex items-center">{answer}</p>
           
-          <div className="absolute bottom-16 right-4 left-4 flex justify-center">
-            <button onClick={(e) => playTTS(e, answer)} className="p-2 text-gray-500 hover:text-green-600 rounded-full hover:bg-green-100 dark:hover:bg-green-900/40 transition-colors">
-               <Volume2 size={18} />
+          <div className="absolute bottom-20 right-4 left-4 flex justify-center">
+            <button onClick={(e) => playTTS(e, answer)} className="p-3 text-gray-500 hover:text-purple-600 rounded-full hover:bg-purple-100 dark:hover:bg-purple-900/40 transition-colors">
+               <Volume2 size={20} />
             </button>
           </div>
 
-          <div className="absolute bottom-4 left-4 right-4 flex justify-center gap-2 z-10" onClick={e => e.stopPropagation()}>
-             <button onClick={(e) => handleRating(e, 'again')} className="px-3 py-1.5 text-xs font-bold bg-red-100 text-red-700 hover:bg-red-200 rounded-md">Again</button>
-             <button onClick={(e) => handleRating(e, 'hard')} className="px-3 py-1.5 text-xs font-bold bg-orange-100 text-orange-700 hover:bg-orange-200 rounded-md">Hard</button>
-             <button onClick={(e) => handleRating(e, 'good')} className="px-3 py-1.5 text-xs font-bold bg-blue-100 text-blue-700 hover:bg-blue-200 rounded-md">Good</button>
-             <button onClick={(e) => handleRating(e, 'easy')} className="px-3 py-1.5 text-xs font-bold bg-green-100 text-green-700 hover:bg-green-200 rounded-md">Easy</button>
+          <div className="absolute bottom-6 left-4 right-4 flex justify-center gap-3 z-10" onClick={e => e.stopPropagation()}>
+             <button onClick={(e) => handleRating(e, 'again')} className="px-4 py-2 text-sm font-bold bg-white/80 dark:bg-gray-800/80 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 border border-red-100 dark:border-red-900/50 rounded-xl transition-all shadow-sm">Again</button>
+             <button onClick={(e) => handleRating(e, 'hard')} className="px-4 py-2 text-sm font-bold bg-white/80 dark:bg-gray-800/80 text-orange-600 hover:bg-orange-50 dark:hover:bg-orange-900/30 border border-orange-100 dark:border-orange-900/50 rounded-xl transition-all shadow-sm">Hard</button>
+             <button onClick={(e) => handleRating(e, 'good')} className="px-4 py-2 text-sm font-bold bg-white/80 dark:bg-gray-800/80 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/30 border border-blue-100 dark:border-blue-900/50 rounded-xl transition-all shadow-sm">Good</button>
+             <button onClick={(e) => handleRating(e, 'easy')} className="px-4 py-2 text-sm font-bold bg-white/80 dark:bg-gray-800/80 text-green-600 hover:bg-green-50 dark:hover:bg-green-900/30 border border-green-100 dark:border-green-900/50 rounded-xl transition-all shadow-sm">Easy</button>
           </div>
         </div>
 
-      </div>
+      </motion.div>
       
       {/* CSS for 3D flip */}
       <style>{`

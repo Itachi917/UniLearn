@@ -102,7 +102,6 @@ export const TRANSLATIONS = {
     level4: "Level 4",
     unir: "Unir",
     dashboard: "Dashboard",
-    unir: "Unir",
     backToSubjects: "Back to Subjects",
     backToLevels: "Back to Levels",
     manageSubjects: "Manage Subjects",

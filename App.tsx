@@ -1,15 +1,16 @@
-import React, { ReactNode, useState } from 'react';
+import React, { ReactNode, useState, Suspense, lazy } from 'react';
 import { HashRouter as Router, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import { AppProvider, useApp } from './context/AppContext';
-import Landing from './pages/Landing';
-import LevelSelection from './pages/LevelSelection';
-import SubjectCatalog from './pages/SubjectCatalog';
-import SubjectDashboard from './pages/SubjectDashboard';
-import LectureRoom from './pages/LectureRoom';
-import AdminDashboard from './pages/AdminDashboard';
-import UserProfile from './pages/UserProfile';
-import Leaderboard from './pages/Leaderboard';
-import { LogIn, X, Lock } from 'lucide-react';
+import { LogIn, X } from 'lucide-react';
+
+const Landing = lazy(() => import('./pages/Landing'));
+const LevelSelection = lazy(() => import('./pages/LevelSelection'));
+const SubjectCatalog = lazy(() => import('./pages/SubjectCatalog'));
+const SubjectDashboard = lazy(() => import('./pages/SubjectDashboard'));
+const LectureRoom = lazy(() => import('./pages/LectureRoom'));
+const AdminDashboard = lazy(() => import('./pages/AdminDashboard'));
+const UserProfile = lazy(() => import('./pages/UserProfile'));
+const Leaderboard = lazy(() => import('./pages/Leaderboard'));
 
 const ProtectedRoute = ({ children }: { children?: ReactNode }) => {
   const { user, isLoading } = useApp();
@@ -69,66 +70,68 @@ const AppRoutes = () => {
   return (
     <>
       <LoginReminderModal />
-      <Routes>
-        <Route path="/" element={<Navigate to="/levels" replace />} />
-        <Route path="/login" element={<Landing />} />
-        <Route 
-          path="/levels" 
-          element={
-            <ProtectedRoute>
-              <LevelSelection />
-            </ProtectedRoute>
-          } 
-        />
-        <Route 
-          path="/subjects" 
-          element={
-            <ProtectedRoute>
-              <SubjectCatalog />
-            </ProtectedRoute>
-          } 
-        />
-        <Route 
-          path="/subject/:subjectId" 
-          element={
-            <ProtectedRoute>
-              <SubjectDashboard />
-            </ProtectedRoute>
-          } 
-        />
-        <Route 
-          path="/lecture/:subjectId/:lectureId" 
-          element={
-            <ProtectedRoute>
-              <LectureRoom />
-            </ProtectedRoute>
-          } 
-        />
-        <Route 
-          path="/admin" 
-          element={
-            <ProtectedRoute>
-              <AdminDashboard />
-            </ProtectedRoute>
-          } 
-        />
-        <Route 
-          path="/profile" 
-          element={
-            <ProtectedRoute>
-              <UserProfile />
-            </ProtectedRoute>
-          } 
-        />
-        <Route 
-          path="/leaderboard" 
-          element={
-            <ProtectedRoute>
-              <Leaderboard />
-            </ProtectedRoute>
-          } 
-        />
-      </Routes>
+      <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-gray-500">Loading experience...</div>}>
+        <Routes>
+          <Route path="/" element={<Navigate to="/levels" replace />} />
+          <Route path="/login" element={<Landing />} />
+          <Route 
+            path="/levels" 
+            element={
+              <ProtectedRoute>
+                <LevelSelection />
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="/subjects" 
+            element={
+              <ProtectedRoute>
+                <SubjectCatalog />
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="/subject/:subjectId" 
+            element={
+              <ProtectedRoute>
+                <SubjectDashboard />
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="/lecture/:subjectId/:lectureId" 
+            element={
+              <ProtectedRoute>
+                <LectureRoom />
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="/admin" 
+            element={
+              <ProtectedRoute>
+                <AdminDashboard />
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="/profile" 
+            element={
+              <ProtectedRoute>
+                <UserProfile />
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="/leaderboard" 
+            element={
+              <ProtectedRoute>
+                <Leaderboard />
+              </ProtectedRoute>
+            } 
+          />
+        </Routes>
+      </Suspense>
     </>
   );
 };

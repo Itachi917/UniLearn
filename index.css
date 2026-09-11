@@ -1,28 +1,103 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Cairo:wght@400;600;700&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 @layer base {
   :root {
-    --color-primary-50: #eff6ff;
-    --color-primary-100: #dbeafe;
-    --color-primary-200: #bfdbfe;
-    --color-primary-300: #93c5fd;
-    --color-primary-400: #60a5fa;
-    --color-primary-500: #3b82f6;
-    --color-primary-600: #2563eb;
-    --color-primary-700: #1d4ed8;
-    --color-primary-800: #1e40af;
-    --color-primary-900: #1e3a8a;
+    /* Rich, vibrant neon-accented color palette */
+    --color-primary-50: #eef2ff;
+    --color-primary-100: #e0e7ff;
+    --color-primary-200: #c7d2fe;
+    --color-primary-300: #a5b4fc;
+    --color-primary-400: #818cf8;
+    --color-primary-500: #6366f1;
+    --color-primary-600: #4f46e5;
+    --color-primary-700: #4338ca;
+    --color-primary-800: #3730a3;
+    --color-primary-900: #312e81;
     
     --color-surface-50: #f8fafc;
-    --color-surface-800: #1e293b;
-    --color-surface-900: #0f172a;
+    --color-surface-800: #0f172a;
+    --color-surface-900: #020617; /* True dark space background */
     
     --color-card: #ffffff;
   }
 
   .dark {
-    --color-card: #1e293b;
+    /* Glassmorphism Card on Dark Mode */
+    --color-card: rgba(15, 23, 42, 0.7); 
+  }
+}
+
+body {
+    font-family: 'Inter', sans-serif;
+    background-image: radial-gradient(circle at top right, rgba(99, 102, 241, 0.15), transparent 400px),
+                      radial-gradient(circle at bottom left, rgba(236, 72, 153, 0.1), transparent 400px);
+    background-color: var(--color-surface-50);
+    background-attachment: fixed;
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    transition: background 0.3s ease;
+}
+
+.dark body {
+    background-image: radial-gradient(circle at top right, rgba(79, 70, 229, 0.2), transparent 500px),
+                      radial-gradient(circle at bottom left, rgba(219, 39, 119, 0.15), transparent 500px);
+    background-color: var(--color-surface-900);
+}
+
+/* Glassmorphism utility for floating cards */
+@layer utilities {
+  .glass-card {
+    @apply bg-white/80 dark:bg-slate-900/60 backdrop-blur-md border border-white/20 dark:border-slate-800/50 shadow-xl;
+  }
+  
+  .glass-nav {
+    @apply bg-white/70 dark:bg-slate-900/50 backdrop-blur-lg border-b border-white/20 dark:border-slate-800/50 shadow-sm transition-all duration-300;
+  }
+
+  /* Smooth gradient text */
+  .text-gradient {
+    @apply bg-clip-text text-transparent bg-gradient-to-r from-blue-600 to-indigo-600 dark:from-indigo-400 dark:to-purple-400;
+  }
+}
+
+.rtl {
+  direction: rtl;
+  font-family: 'Cairo', sans-serif;
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 10px;
+}
+.dark ::-webkit-scrollbar-thumb {
+  background: #475569;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+@media print {
+  .no-print {
+      display: none !important;
+  }
+  body {
+      background: white !important;
+      color: black !important;
+  }
+  .print-only {
+      display: block !important;
   }
 }

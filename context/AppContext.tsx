@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { User, UserProgress, Language, Subject, AppTheme, FlashcardSuggestion } from '../types';
 import { TRANSLATIONS, APP_THEMES } from '../constants';
 import { supabase } from '../lib/supabase';
@@ -56,8 +57,11 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
   const isAdmin = user?.email === 'asm977661@gmail.com';
   const currentTheme = APP_THEMES.find(t => t.id === currentThemeId) || APP_THEMES[0];
 
-  const refreshSubjects = async () => {
-    try {
+  const queryClient = useQueryClient();
+
+  const { data: fetchedSubjects, refetch: refetchSubjectsQuery } = useQuery({
+    queryKey: ['subjects'],
+    queryFn: async () => {
       const { data, error } = await supabase
         .from('app_content')
         .select('content')
@@ -66,21 +70,24 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
       
       if (error) {
         console.error("Error fetching subjects from Supabase:", error);
-        return;
+        throw error;
       }
+      return Array.isArray(data?.content) ? data.content as Subject[] : [];
+    },
+    staleTime: 5 * 60 * 1000, // Data is fresh for 5 minutes
+    gcTime: 30 * 60 * 1000, // Keep in cache for 30 minutes
+  });
 
-      if (data && data.content && Array.isArray(data.content)) {
-        setSubjects(data.content);
-      }
-    } catch (err) {
-      console.error("Error executing fetch subjects:", err);
-    }
-  };
-
-  // Fetch subjects immediately on mount (for guests/everyone) AND when user changes
+  // Keep local state in sync with React Query for optimistic updates by Admin
   useEffect(() => {
-    refreshSubjects();
-  }, [user?.uid]);
+    if (fetchedSubjects) {
+      setSubjects(fetchedSubjects);
+    }
+  }, [fetchedSubjects]);
+
+  const refreshSubjects = async () => {
+    await refetchSubjectsQuery();
+  };
 
   const calculateStreak = (lastDateStr?: string, currentStreak?: number) => {
       const now = new Date();
