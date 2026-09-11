@@ -8,11 +8,13 @@ import Quiz from '../components/ui/Quiz';
 import ReactMarkdown from 'react-markdown';
 import { Flashcard as IFlashcard, MediaType } from '../types';
 import MindMapRenderer from '../components/ui/MindMapRenderer';
+import AITutor from '../components/ui/AITutor';
 
 const LectureRoom: React.FC = () => {
   const { subjectId, lectureId } = useParams<{ subjectId: string, lectureId: string }>();
   const { t, language, markLectureComplete, updateQuizScore, logStudyTime, progress, subjects, user, submitFlashcardSuggestion } = useApp();
   const [activeTab, setActiveTab] = useState<'summary' | 'flashcards' | 'quiz' | 'media'>('summary');
+  const [isAITutorOpen, setIsAITutorOpen] = useState(false);
 
   const subject = subjects.find(s => s.id === subjectId);
   const lecture = subject?.lectures.find(l => String(l.id) === String(lectureId));
@@ -180,9 +182,27 @@ const LectureRoom: React.FC = () => {
   ] as const;
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex flex-col relative">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex flex-col relative overflow-hidden">
       <Navbar />
       
+      {/* AI Tutor Sidebar */}
+      <AITutor 
+        lecture={lecture} 
+        isOpen={isAITutorOpen} 
+        onClose={() => setIsAITutorOpen(false)} 
+      />
+
+      {/* Floating AI Tutor Button */}
+      <button
+        onClick={() => setIsAITutorOpen(true)}
+        className="fixed bottom-6 right-6 z-50 p-4 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white rounded-full shadow-2xl hover:shadow-indigo-500/50 transition-all hover:scale-105 group"
+      >
+        <div className="flex items-center gap-2">
+          <BrainCircuit size={24} className="group-hover:animate-pulse" />
+          <span className="font-bold hidden md:block px-1">AI Tutor</span>
+        </div>
+      </button>
+
       {/* Suggestion Modal */}
       {isSuggestModalOpen && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fade-in">
