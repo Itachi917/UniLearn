@@ -14,7 +14,7 @@ export function gradeShortAnswer(userAnswer: string, correctAnswers: string[]): 
   const fuse = new Fuse(correctAnswers.map(a => ({ text: a })), {
     keys: ['text'],
     threshold: 0.4,     // 0.0 = exact, 0.4 = quite forgiving
-    ignoreCase: true,
+    includeScore: true, // Need this to access result.score
   });
 
   const result = fuse.search(normalizedUser);

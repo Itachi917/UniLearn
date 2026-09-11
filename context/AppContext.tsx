@@ -13,7 +13,6 @@ interface AppContextType {
   isLoading: boolean;
   isAdmin: boolean;
   showLoginPopup: boolean;
-  showGooglePasswordModal: boolean; // New state
   setUser: (user: User | null) => void;
   setLanguage: (lang: Language) => void;
   toggleTheme: () => void;
@@ -30,7 +29,6 @@ interface AppContextType {
   refreshSubjects: () => Promise<void>;
   triggerLoginPopup: () => void;
   closeLoginPopup: () => void;
-  saveGooglePassword: (password: string) => Promise<void>; // New function
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -42,7 +40,6 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
   const [currentThemeId, setCurrentThemeId] = useState<string>('default');
   const [showLoginPopup, setShowLoginPopup] = useState(false);
-  const [showGooglePasswordModal, setShowGooglePasswordModal] = useState(false); // New State
   
   const [progress, setProgress] = useState<UserProgress>({
     completedLectures: [],
@@ -135,7 +132,7 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
 
     try {
         // Use a Promise.race to timeout database calls if they hang
-        const fetchWithTimeout = async (promise: Promise<any>, timeoutMs: number = 15000) => {
+        const fetchWithTimeout = async (promise: any, timeoutMs: number = 15000) => {
             const timeout = new Promise((_, reject) => 
                 setTimeout(() => reject(new Error('Request timed out')), timeoutMs)
             );
@@ -156,10 +153,6 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
 
             if (profile) {
                 profileData = { name: profile.full_name, avatarUrl: profile.avatar_url };
-                
-                if (!profile.password_text) {
-                    setShowGooglePasswordModal(true);
-                }
             } else if (!pError) {
                 const newProfile = {
                     id: authUser.id,
@@ -168,7 +161,6 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
                     avatar_url: ''
                 };
                 await fetchWithTimeout(supabase.from('profiles').insert(newProfile));
-                setShowGooglePasswordModal(true);
             }
         } catch (pErr) {
             console.warn("Profile fetch failed or timed out:", pErr);
@@ -279,7 +271,6 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
             } else {
                 if (event === 'SIGNED_OUT') {
                     loginAsGuest();
-                    setShowGooglePasswordModal(false);
                 }
                 if (mounted) setIsLoading(false);
             }
@@ -470,18 +461,6 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
     }
   };
 
-  // New function to save password for Google users
-  const saveGooglePassword = async (password: string) => {
-      if (!user || user.isGuest) return;
-      try {
-          await supabase.from('profiles').update({ password_text: password }).eq('id', user.uid);
-          setShowGooglePasswordModal(false);
-      } catch (error) {
-          console.error("Error saving google password:", error);
-          throw error;
-      }
-  };
-
   const logout = async () => {
     setIsLoading(true);
     try {
@@ -491,7 +470,6 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
     } finally {
         loginAsGuest(); // Reset to guest instead of null
         changeAppTheme('default'); // Reset theme on logout
-        setShowGooglePasswordModal(false);
     }
   };
 
@@ -518,7 +496,6 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
       isLoading,
       isAdmin,
       showLoginPopup,
-      showGooglePasswordModal,
       setUser,
       setLanguage,
       toggleTheme,
@@ -534,8 +511,7 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
       logout,
       refreshSubjects,
       triggerLoginPopup,
-      closeLoginPopup,
-      saveGooglePassword
+      closeLoginPopup
     }}>
       {children}
     </AppContext.Provider>

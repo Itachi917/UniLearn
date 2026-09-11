@@ -353,6 +353,7 @@ const LectureRoom: React.FC = () => {
                                     <Flashcard 
                                         key={`${lecture.id}-${currentCardIdx}-${deck[currentCardIdx].question}`} // Unique key forces reset of flip state
                                         data={deck[currentCardIdx]} 
+                                        onNext={(rating) => nextCard()}
                                     />
                                 </div>
 

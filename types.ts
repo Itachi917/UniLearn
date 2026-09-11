@@ -83,7 +83,6 @@ export interface UserProfileData {
   email: string;
   full_name: string;
   avatar_url: string;
-  password_text?: string;
 }
 
 export interface FlashcardSuggestion {

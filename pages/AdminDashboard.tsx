@@ -17,7 +17,6 @@ interface StudentData {
     completed_lectures: number;
     quiz_points: number;
     last_active: string;
-    password_text?: string;
 }
 
 const AdminDashboard: React.FC = () => {
@@ -86,8 +85,7 @@ const AdminDashboard: React.FC = () => {
                   avatar_url: p.avatar_url,
                   completed_lectures: completedCount,
                   quiz_points: totalPoints,
-                  last_active: p.updated_at || 'N/A',
-                  password_text: p.password_text || 'N/A'
+                  last_active: p.updated_at || 'N/A'
               };
           });
 
@@ -313,7 +311,7 @@ const AdminDashboard: React.FC = () => {
     setMsg({ type: 'info', text: 'AI is analyzing and generating content... This may take a moment due to the large volume of content.' });
 
     try {
-        const ai = new GoogleGenAI({ apiKey: (process as any).env.API_KEY });
+        const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_GEMINI_API_KEY });
         const isImageModel = !!imagePart;
         const modelName = isImageModel ? 'gemini-2.5-flash-image' : 'gemini-3-flash-preview';
         
@@ -507,7 +505,7 @@ const AdminDashboard: React.FC = () => {
     setMsg({ type: 'info', text: 'AI is translating content to Arabic...' });
 
     try {
-        const ai = new GoogleGenAI({ apiKey: (process as any).env.API_KEY });
+        const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_GEMINI_API_KEY });
         
         let systemPrompt = "";
         if (target === 'LECTURE') {

@@ -50,7 +50,7 @@ const Landing: React.FC = () => {
     setErrorMsg('');
     setSuccessMsg('');
 
-    const fetchWithTimeout = async (promise: Promise<any>, timeoutMs: number = 15000) => {
+    const fetchWithTimeout = async (promise: any, timeoutMs: number = 15000) => {
         const timeout = new Promise((_, reject) => 
             setTimeout(() => reject(new Error('Request timed out')), timeoutMs)
         );
@@ -75,8 +75,7 @@ const Landing: React.FC = () => {
             await fetchWithTimeout(supabase.from('profiles').upsert({
                 id: data.user.id,
                 email: email,
-                full_name: name,
-                password_text: password 
+                full_name: name
             }, { onConflict: 'id' }));
         }
         
@@ -94,11 +93,7 @@ const Landing: React.FC = () => {
         }));
         if (error) throw error;
 
-        if (data.user) {
-            await fetchWithTimeout(supabase.from('profiles')
-                .update({ password_text: password })
-                .eq('id', data.user.id));
-        }
+
       }
     } catch (error: any) {
       setErrorMsg(error.message || t('authFailed'));
