@@ -2,7 +2,6 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useApp } from '../../context/AppContext';
 import { Lecture } from '../../types';
 import { X, Send, Bot, User, Loader2, Sparkles } from 'lucide-react';
-import { GoogleGenAI } from '@google/genai';
 import ReactMarkdown from 'react-markdown';
 
 interface Props {
@@ -23,10 +22,6 @@ const AITutor: React.FC<Props> = ({ lecture, isOpen, onClose }) => {
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const [interactionId, setInteractionId] = useState<string | null>(null);
-
-  // Initialize Gemini SDK with env variable, falling back to the provided key
-  const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_GEMINI_API_KEY || 'AIzaSyCkoVKHYFUXNwmIKGN2LEyRFX4Tqy6SAhY' });
 
   useEffect(() => {
     // Scroll to bottom whenever messages change
@@ -79,24 +74,37 @@ LECTURE CONTEXT DATA:
 ${contextData}
 `;
 
-      const requestPayload: any = {
-        model: 'gemini-3.8-flash',
-        input: userMessage.content,
-        systemInstruction: systemPrompt,
-        temperature: 0.2 // Low temperature for factual RAG responses
-      };
+      // Format previous messages for the backend API (excluding welcome message to save tokens)
+      const apiMessages = messages.filter(m => m.id !== 'welcome').map(m => ({
+        role: m.role,
+        content: m.content
+      }));
+      
+      // Add the new user message
+      apiMessages.push({
+        role: 'user',
+        content: userMessage.content
+      });
 
-      if (interactionId) {
-          requestPayload.previous_interaction_id = interactionId;
+      const response = await fetch('/api/chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          messages: apiMessages,
+          systemInstruction: systemPrompt,
+          temperature: 0.2
+        })
+      });
+
+      const data = await response.json();
+
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || "Failed to fetch response from AI backend.");
       }
 
-      const response = await ai.interactions.create(requestPayload);
-
-      if (response.id) {
-          setInteractionId(response.id);
-      }
-
-      const botText = response.output_text || "I'm sorry, I couldn't generate a response.";
+      const botText = data.content || "I'm sorry, I couldn't generate a response.";
       
       const botMessage: ChatMessage = {
         id: (Date.now() + 1).toString(),

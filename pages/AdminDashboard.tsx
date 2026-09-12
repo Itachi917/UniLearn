@@ -311,138 +311,27 @@ const AdminDashboard: React.FC = () => {
     setMsg({ type: 'info', text: 'AI is analyzing and generating content... This may take a moment due to the large volume of content.' });
 
     try {
-        const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_GEMINI_API_KEY });
-        const isImageModel = !!imagePart;
-        const modelName = isImageModel ? 'gemini-2.5-flash-image' : 'gemini-3-flash-preview';
-        
-        let systemPrompt = "";
-
-        if (target === 'LECTURE') {
-             systemPrompt = `Generate comprehensive, high-quality university-level lecture content in BOTH English and Arabic.
-                The subject is "${subjectTitle}".
-                Lecture Context: ${promptContext || lectureTitle}
-                
-                Requirements:
-                1. Summary: Create a detailed summary in Markdown (field: summary) and its Arabic translation (field: summaryAr). Use headers (#, ##), bullet points, and bold text for emphasis. Ensure it covers key concepts thoroughly.
-                2. Topics: List 5-8 key topics (English only).
-                3. Flashcards: Generate at least 15 high-quality flashcards. Each card must have:
-                   - question (English)
-                   - questionAr (Arabic)
-                   - answer (English)
-                   - answerAr (Arabic)
-                4. Quiz: Generate at least 10 questions. Mix Multiple Choice (MCQ) and Short Answer (SHORT) types.
-                   - For MCQ, provide 4 options (options) and their Arabic translations (optionsAr), and the correctIndex.
-                   - For SHORT, provide the main correctAnswer (English) and correctAnswerAr (Arabic), and a list of acceptedAnswers (variations, typos, synonyms in English).
-                
-                Output strictly valid JSON. No markdown code blocks.`;
-        } else {
-             systemPrompt = `Generate a robust question bank for the university subject: "${subjectTitle}" in BOTH English and Arabic.
-                Context: ${promptContext || "General comprehensive review"}
-                
-                Requirements:
-                1. Generate at least 20 high-quality questions.
-                2. Mix Multiple Choice (MCQ) and Short Answer (SHORT) types (~50/50 split).
-                3. Structure:
-                   - For MCQ: { "type": "MCQ", "question": "...", "questionAr": "...", "options": ["..."], "optionsAr": ["..."], "correctIndex": 0 }
-                   - For SHORT: { "type": "SHORT", "question": "...", "questionAr": "...", "correctAnswer": "...", "correctAnswerAr": "...", "acceptedAnswers": ["..."] }
-                
-                Output strictly valid JSON array of questions.`;
-        }
-
-        if (isImageModel) {
-             // Simplify schema hint for image model as it doesn't support responseSchema
-             systemPrompt += `\n\nReturn JSON only.`;
-        }
-
-        let contents: any;
-        if (imagePart) {
-             contents = {
-                parts: [
-                    imagePart,
-                    { text: systemPrompt }
-                ]
-            };
-        } else {
-             contents = systemPrompt;
-        }
-
-        const config: any = {
-            maxOutputTokens: 8192, 
-        };
-        
-        if (!isImageModel) {
-            config.responseMimeType = "application/json";
-            
-            if (target === 'LECTURE') {
-                config.responseSchema = {
-                    type: Type.OBJECT,
-                    properties: {
-                        summary: { type: Type.STRING },
-                        summaryAr: { type: Type.STRING },
-                        topics: { type: Type.ARRAY, items: { type: Type.STRING } },
-                        flashcards: {
-                            type: Type.ARRAY,
-                            items: {
-                                type: Type.OBJECT,
-                                properties: { 
-                                    question: { type: Type.STRING }, 
-                                    questionAr: { type: Type.STRING }, 
-                                    answer: { type: Type.STRING },
-                                    answerAr: { type: Type.STRING }
-                                },
-                                required: ['question', 'questionAr', 'answer', 'answerAr']
-                            }
-                        },
-                        quiz: {
-                            type: Type.ARRAY,
-                            items: {
-                                type: Type.OBJECT,
-                                properties: {
-                                    type: { type: Type.STRING, enum: ["MCQ", "SHORT"] },
-                                    question: { type: Type.STRING },
-                                    questionAr: { type: Type.STRING },
-                                    options: { type: Type.ARRAY, items: { type: Type.STRING } },
-                                    optionsAr: { type: Type.ARRAY, items: { type: Type.STRING } },
-                                    correctIndex: { type: Type.INTEGER },
-                                    correctAnswer: { type: Type.STRING },
-                                    correctAnswerAr: { type: Type.STRING },
-                                    acceptedAnswers: { type: Type.ARRAY, items: { type: Type.STRING } }
-                                },
-                                required: ['type', 'question', 'questionAr']
-                            }
-                        }
-                    },
-                    required: ['summary', 'summaryAr', 'topics', 'flashcards', 'quiz']
-                };
-            } else {
-                 config.responseSchema = {
-                    type: Type.ARRAY,
-                    items: {
-                        type: Type.OBJECT,
-                        properties: {
-                            type: { type: Type.STRING, enum: ["MCQ", "SHORT"] },
-                            question: { type: Type.STRING },
-                            questionAr: { type: Type.STRING },
-                            options: { type: Type.ARRAY, items: { type: Type.STRING } },
-                            optionsAr: { type: Type.ARRAY, items: { type: Type.STRING } },
-                            correctIndex: { type: Type.INTEGER },
-                            correctAnswer: { type: Type.STRING },
-                            correctAnswerAr: { type: Type.STRING },
-                            acceptedAnswers: { type: Type.ARRAY, items: { type: Type.STRING } }
-                        },
-                        required: ['type', 'question', 'questionAr']
-                    }
-                };
-            }
-        }
-
-        const response = await ai.models.generateContent({
-            model: modelName,
-            contents: contents,
-            config: config
+        const response = await fetch('/api/generate', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                target,
+                subjectTitle,
+                lectureTitle: target === 'LECTURE' ? lectureTitle : undefined,
+                promptContext,
+                imagePart
+            })
         });
 
-        const text = response.text || "{}";
+        const dataResponse = await response.json();
+        
+        if (!response.ok || !dataResponse.success) {
+            throw new Error(dataResponse.error || "Generation failed from backend API");
+        }
+
+        const text = dataResponse.content || "{}";
         const cleanedText = text.replace(/```json\s*|```/g, '').trim();
 
         let data;
