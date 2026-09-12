@@ -5,6 +5,7 @@ import { Link, useParams } from 'react-router-dom';
 import { PlayCircle, CheckCircle2, Lock, ChevronRight, BrainCircuit, Play, X } from 'lucide-react';
 import Quiz from '../components/ui/Quiz';
 import { QuizQuestion } from '../types';
+import ExamCountdown from '../components/ui/ExamCountdown';
 
 const SubjectDashboard: React.FC = () => {
   const { subjectId } = useParams<{ subjectId: string }>();
@@ -145,6 +146,10 @@ const SubjectDashboard: React.FC = () => {
                 {language === 'ar' ? subject.titleAr : subject.title}
             </h1>
             <p className="text-gray-500">{subject.lectures.length} {t('lectures')} available</p>
+        </div>
+
+        <div className="mb-10">
+            <ExamCountdown subjectId={subject.id} />
         </div>
 
         {/* Test Yourself Section */}

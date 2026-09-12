@@ -7,7 +7,11 @@ import { ChevronRight, Layers, Trophy, Flame } from 'lucide-react';
 const levels = ['Level-1', 'Level-2', 'Level-3', 'Level-4', 'Unir'];
 
 const LevelSelection: React.FC = () => {
-  const { t, language, subjects } = useApp();
+  const { t, language, subjects, progress } = useApp();
+
+  const dueCardsCount = progress.srsData 
+      ? Object.values(progress.srsData).filter(data => new Date(data.nextReviewDate) <= new Date()).length
+      : 0;
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
@@ -42,6 +46,26 @@ const LevelSelection: React.FC = () => {
                 </p>
             </div>
         </div>
+
+        {/* SRS Cards Due Banner */}
+        {dueCardsCount > 0 && (
+            <Link to="/review" className="block max-w-2xl mx-auto mb-12 transform transition-transform hover:scale-[1.02]">
+                <div className="bg-gradient-to-r from-blue-600 to-indigo-600 rounded-2xl p-6 shadow-lg shadow-blue-500/20 text-white flex items-center justify-between">
+                    <div className="flex items-center gap-4">
+                        <div className="p-3 bg-white/20 rounded-xl backdrop-blur-sm">
+                            <Layers size={28} className="text-white" />
+                        </div>
+                        <div>
+                            <h3 className="text-xl font-bold">Time for Review!</h3>
+                            <p className="text-blue-100 text-sm">You have {dueCardsCount} flashcards due for review today.</p>
+                        </div>
+                    </div>
+                    <div className="bg-white text-blue-600 px-4 py-2 rounded-lg font-bold text-sm shadow-sm flex items-center gap-2">
+                        Start Review <ChevronRight size={16} />
+                    </div>
+                </div>
+            </Link>
+        )}
 
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-6 mb-12">
           {levels.map((level, idx) => {

@@ -5,6 +5,7 @@ import { Link } from 'react-router-dom';
 import { User as UserIcon, Award, BookOpen, Clock, ChevronRight, Upload, Camera, Flame, TrendingUp, AlertCircle, ArrowRight } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts';
+import StudyHeatmap from '../components/ui/StudyHeatmap';
 
 const UserProfile: React.FC = () => {
   const { user, progress, subjects, t, updateUserProfile } = useApp();
@@ -258,6 +259,30 @@ const UserProfile: React.FC = () => {
                     <div className="text-4xl font-bold mb-1">{streak} Days</div>
                     <p className="text-xs opacity-75">Keep learning daily to increase your streak!</p>
                 </div>
+
+                {/* Badges Card */}
+                <div className="bg-card dark:bg-gray-800 rounded-2xl p-6 shadow-sm border border-gray-200 dark:border-gray-700">
+                    <h3 className="font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+                        <Award size={20} className="text-yellow-500" /> Achievements
+                    </h3>
+                    <div className="flex flex-wrap gap-3">
+                        {streak >= 3 ? (
+                            <div className="flex items-center gap-2 px-3 py-1.5 bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400 rounded-full text-xs font-bold" title="3 Day Streak">🔥 On Fire</div>
+                        ) : <div className="px-3 py-1.5 bg-gray-100 text-gray-400 dark:bg-gray-700 dark:text-gray-500 rounded-full text-xs font-medium">🔥 3 Day Streak</div>}
+                        
+                        {completedCount >= 5 ? (
+                            <div className="flex items-center gap-2 px-3 py-1.5 bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 rounded-full text-xs font-bold" title="5 Lectures Completed">📚 Scholar</div>
+                        ) : <div className="px-3 py-1.5 bg-gray-100 text-gray-400 dark:bg-gray-700 dark:text-gray-500 rounded-full text-xs font-medium">📚 5 Lectures</div>}
+
+                        {avgQuizScore >= 4 ? (
+                            <div className="flex items-center gap-2 px-3 py-1.5 bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 rounded-full text-xs font-bold" title="Average Score 4+">🎯 Sharpshooter</div>
+                        ) : <div className="px-3 py-1.5 bg-gray-100 text-gray-400 dark:bg-gray-700 dark:text-gray-500 rounded-full text-xs font-medium">🎯 Avg Score 4+</div>}
+
+                        {studyTimeHours >= 10 ? (
+                            <div className="flex items-center gap-2 px-3 py-1.5 bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400 rounded-full text-xs font-bold" title="10+ Hours Studied">⏱️ Dedicated</div>
+                        ) : <div className="px-3 py-1.5 bg-gray-100 text-gray-400 dark:bg-gray-700 dark:text-gray-500 rounded-full text-xs font-medium">⏱️ 10+ Hours</div>}
+                    </div>
+                </div>
             </div>
 
             {/* Right Column: Analytics & Progress */}
@@ -309,6 +334,8 @@ const UserProfile: React.FC = () => {
                         )}
                     </div>
                 </div>
+
+                <StudyHeatmap />
 
                 {/* Recommended Review */}
                 <div className="bg-card dark:bg-gray-800 p-6 rounded-xl border border-gray-200 dark:border-gray-700">

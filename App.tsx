@@ -11,6 +11,10 @@ const LectureRoom = lazy(() => import('./pages/LectureRoom'));
 const AdminDashboard = lazy(() => import('./pages/AdminDashboard'));
 const UserProfile = lazy(() => import('./pages/UserProfile'));
 const Leaderboard = lazy(() => import('./pages/Leaderboard'));
+const ReviewMode = lazy(() => import('./pages/ReviewMode'));
+const SocialDashboard = lazy(() => import('./pages/SocialDashboard'));
+const PomodoroTimer = lazy(() => import('./components/ui/PomodoroTimer'));
+const PWAInstallPrompt = lazy(() => import('./components/ui/PWAInstallPrompt'));
 
 const ProtectedRoute = ({ children }: { children?: ReactNode }) => {
   const { user, isLoading } = useApp();
@@ -67,10 +71,14 @@ const LoginReminderModal = () => {
 
 
 const AppRoutes = () => {
+  const { user } = useApp();
+
   return (
     <>
       <LoginReminderModal />
       <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-gray-500">Loading experience...</div>}>
+        {user && !user.isGuest && <PomodoroTimer />}
+        <PWAInstallPrompt />
         <Routes>
           <Route path="/" element={<Navigate to="/levels" replace />} />
           <Route path="/login" element={<Landing />} />
@@ -127,6 +135,22 @@ const AppRoutes = () => {
             element={
               <ProtectedRoute>
                 <Leaderboard />
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="/review" 
+            element={
+              <ProtectedRoute>
+                <ReviewMode />
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="/social" 
+            element={
+              <ProtectedRoute>
+                <SocialDashboard />
               </ProtectedRoute>
             } 
           />

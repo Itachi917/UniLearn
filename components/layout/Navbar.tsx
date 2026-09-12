@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useApp } from '../../context/AppContext';
-import { Moon, Sun, Languages, LogOut, User as UserIcon, Settings, Palette, Check, LogIn } from 'lucide-react';
+import { Moon, Sun, Languages, LogOut, User as UserIcon, Settings, Palette, Check, LogIn, Users } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { APP_THEMES } from '../../constants';
 
@@ -102,6 +102,26 @@ const Navbar: React.FC = () => {
 
                 <div className="flex items-center gap-2 pl-2 sm:pl-4 border-l border-gray-200 dark:border-gray-700">
                     
+                    {/* Gamification Stats */}
+                    <div className="hidden lg:flex items-center gap-4 mr-2 text-sm font-medium">
+                        <div className="flex items-center gap-1 text-orange-500 bg-orange-50 dark:bg-orange-900/20 px-2.5 py-1 rounded-full border border-orange-100 dark:border-orange-800" title="Study Streak (Days)">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-flame"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></svg>
+                            <span>{progress.studyStreak || 0}</span>
+                        </div>
+                        <div className="flex items-center gap-1 text-emerald-600 bg-emerald-50 dark:bg-emerald-900/20 px-2.5 py-1 rounded-full border border-emerald-100 dark:border-emerald-800" title="Total Study Time (Minutes)">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-clock"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                            <span>{progress.totalStudyMinutes || 0}m</span>
+                        </div>
+                    </div>
+
+                    <Link
+                        to="/social"
+                        className="hidden md:flex items-center gap-1 px-3 py-1.5 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors text-sm font-medium"
+                    >
+                        <Users size={16} />
+                        <span>Social</span>
+                    </Link>
+
                     {isAdmin && (
                     <Link
                         to="/admin"

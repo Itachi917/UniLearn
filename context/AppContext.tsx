@@ -23,6 +23,9 @@ interface AppContextType {
   updateUserProfile: (name: string, avatarUrl: string) => Promise<void>;
   enrollSubjects: (subjectIds: string[]) => void;
   logStudyTime: (minutes: number) => void;
+  rateSRSCard: (cardId: string, rating: 'easy' | 'good' | 'hard') => void;
+  saveLectureNotes: (lectureId: string, notes: string) => void;
+  setExamDate: (subjectId: string, date: string) => void;
   submitFlashcardSuggestion: (suggestion: Omit<FlashcardSuggestion, 'id' | 'timestamp' | 'userId' | 'userName'>) => Promise<void>;
   t: (key: keyof typeof TRANSLATIONS['en']) => string;
   loginAsGuest: () => void;
@@ -434,10 +437,81 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
   };
   
   const logStudyTime = (minutes: number) => {
+      const today = new Date().toISOString().split('T')[0];
+      const currentHistory = progress.activityHistory || {};
       const currentTotal = progress.totalStudyMinutes || 0;
+      
       saveProgress({
           ...progress,
-          totalStudyMinutes: currentTotal + minutes
+          totalStudyMinutes: currentTotal + minutes,
+          activityHistory: {
+              ...currentHistory,
+              [today]: (currentHistory[today] || 0) + minutes
+          }
+      });
+  };
+
+  const saveLectureNotes = (lectureId: string, notes: string) => {
+      saveProgress({
+          ...progress,
+          lectureNotes: {
+              ...(progress.lectureNotes || {}),
+              [lectureId]: notes
+          }
+      });
+  };
+
+  const setExamDate = (subjectId: string, date: string) => {
+      saveProgress({
+          ...progress,
+          examDates: {
+              ...(progress.examDates || {}),
+              [subjectId]: date
+          }
+      });
+  };
+
+  const rateSRSCard = (cardId: string, rating: 'easy' | 'good' | 'hard') => {
+      const existingData = progress.srsData?.[cardId] || {
+          nextReviewDate: new Date().toISOString(),
+          interval: 0,
+          easeFactor: 2.5,
+          repetitions: 0
+      };
+
+      let { interval, easeFactor, repetitions } = existingData;
+
+      if (rating === 'hard') {
+          repetitions = 0;
+          interval = 1; // 1 day
+          easeFactor = Math.max(1.3, easeFactor - 0.2);
+      } else if (rating === 'good') {
+          if (repetitions === 0) interval = 1;
+          else if (repetitions === 1) interval = 3;
+          else interval = Math.round(interval * easeFactor);
+          repetitions += 1;
+      } else if (rating === 'easy') {
+          if (repetitions === 0) interval = 2;
+          else if (repetitions === 1) interval = 4;
+          else interval = Math.round(interval * easeFactor * 1.3);
+          easeFactor += 0.15;
+          repetitions += 1;
+      }
+
+      const nextReviewDate = new Date();
+      nextReviewDate.setDate(nextReviewDate.getDate() + interval);
+
+      saveProgress({
+          ...progress,
+          srsData: {
+              ...(progress.srsData || {}),
+              [cardId]: {
+                  nextReviewDate: nextReviewDate.toISOString(),
+                  interval,
+                  easeFactor,
+                  repetitions
+              }
+          }
       });
   };
 
@@ -512,6 +586,9 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
       updateUserProfile,
       enrollSubjects,
       logStudyTime,
+      rateSRSCard,
+      saveLectureNotes,
+      setExamDate,
       submitFlashcardSuggestion,
       t,
       loginAsGuest,

@@ -2,19 +2,22 @@ import React, { useState, useEffect, useRef } from 'react';
 import Navbar from '../components/layout/Navbar';
 import { useApp } from '../context/AppContext';
 import { useParams, Link } from 'react-router-dom';
-import { FileText, Layers, BrainCircuit, ChevronRight, CheckCircle, ChevronLeft, Shuffle, Download, Printer, FileType, PlusCircle, X, Network } from 'lucide-react';
+import { FileText, Layers, BrainCircuit, ChevronRight, CheckCircle, ChevronLeft, Shuffle, Download, Printer, FileType, PlusCircle, X, Network, BookOpen, Maximize2 } from 'lucide-react';
 import Flashcard from '../components/ui/Flashcard';
 import Quiz from '../components/ui/Quiz';
 import ReactMarkdown from 'react-markdown';
 import { Flashcard as IFlashcard, MediaType } from '../types';
 import MindMapRenderer from '../components/ui/MindMapRenderer';
 import AITutor from '../components/ui/AITutor';
+import LectureNotes from '../components/ui/LectureNotes';
+import FocusMode from '../components/ui/FocusMode';
 
 const LectureRoom: React.FC = () => {
   const { subjectId, lectureId } = useParams<{ subjectId: string, lectureId: string }>();
-  const { t, language, markLectureComplete, updateQuizScore, logStudyTime, progress, subjects, user, submitFlashcardSuggestion } = useApp();
-  const [activeTab, setActiveTab] = useState<'summary' | 'flashcards' | 'quiz' | 'media'>('summary');
+  const { t, language, markLectureComplete, updateQuizScore, logStudyTime, progress, subjects, user, submitFlashcardSuggestion, rateSRSCard } = useApp();
+  const [activeTab, setActiveTab] = useState<'summary' | 'flashcards' | 'quiz' | 'media' | 'notes'>('summary');
   const [isAITutorOpen, setIsAITutorOpen] = useState(false);
+  const [isFocusMode, setIsFocusMode] = useState(false);
 
   const subject = subjects.find(s => s.id === subjectId);
   const lecture = subject?.lectures.find(l => String(l.id) === String(lectureId));
@@ -177,8 +180,9 @@ const LectureRoom: React.FC = () => {
   const tabs = [
     { id: 'summary', icon: FileText, label: t('summary') },
     { id: 'flashcards', icon: Layers, label: t('flashcards') },
-    { id: 'media', icon: Network, label: 'Media' },
     { id: 'quiz', icon: BrainCircuit, label: t('quiz') },
+    { id: 'notes', icon: BookOpen, label: 'Notes' },
+    { id: 'media', icon: Network, label: 'Media' },
   ] as const;
 
   return (
@@ -289,9 +293,14 @@ const LectureRoom: React.FC = () => {
                 {/* Export Tools */}
                 <div className="flex gap-2">
                     {activeTab === 'summary' && (
-                        <button onClick={downloadSummary} className="flex items-center gap-2 px-3 py-1.5 text-sm bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors text-gray-700 dark:text-gray-300">
-                            <Download size={16} /> MD
-                        </button>
+                        <>
+                            <button onClick={downloadSummary} className="flex items-center gap-2 px-3 py-1.5 text-sm bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors text-gray-700 dark:text-gray-300">
+                                <Download size={16} /> MD
+                            </button>
+                            <button onClick={() => window.print()} className="flex items-center gap-2 px-3 py-1.5 text-sm bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors text-gray-700 dark:text-gray-300">
+                                <Printer size={16} /> Print/PDF
+                            </button>
+                        </>
                     )}
                     {activeTab === 'flashcards' && (
                         <button onClick={downloadFlashcardsCSV} className="flex items-center gap-2 px-3 py-1.5 text-sm bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors text-gray-700 dark:text-gray-300">
@@ -352,104 +361,149 @@ const LectureRoom: React.FC = () => {
                 </div>
             )}
 
-            {activeTab === 'flashcards' && (
-                <div className="max-w-4xl mx-auto">
-                    {deck && deck.length > 0 ? (
-                        <div className="flex flex-col gap-8">
-                            
-                            <div className="flex items-center justify-center gap-4 sm:gap-8">
-                                {/* Desktop Previous Arrow */}
-                                <button 
-                                    onClick={prevCard}
-                                    disabled={currentCardIdx === 0}
-                                    className="hidden sm:flex p-4 rounded-full bg-card dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-lg text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 disabled:opacity-30 disabled:cursor-not-allowed transition-all hover:scale-110 active:scale-95"
-                                    title={t('previous')}
-                                >
-                                    <ChevronLeft size={32} className="rtl:rotate-180" />
-                                </button>
-                                
-                                {/* Card Container */}
-                                <div className="flex-1 w-full max-w-xl mx-auto">
-                                    <Flashcard 
-                                        key={`${lecture.id}-${currentCardIdx}-${deck[currentCardIdx].question}`} // Unique key forces reset of flip state
-                                        data={deck[currentCardIdx]} 
-                                        onNext={(rating) => nextCard()}
-                                    />
-                                </div>
+            {/* Focus Mode Button (Only for Flashcards & Quiz) */}
+            {(activeTab === 'flashcards' || activeTab === 'quiz') && !isFocusMode && (
+                <div className="flex justify-end max-w-4xl mx-auto mb-4">
+                    <button 
+                        onClick={() => setIsFocusMode(true)}
+                        className="flex items-center gap-2 px-4 py-2 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 rounded-lg hover:bg-indigo-100 dark:hover:bg-indigo-900/50 transition-colors font-medium text-sm"
+                    >
+                        <Maximize2 size={16} /> Enter Focus Mode
+                    </button>
+                </div>
+            )}
 
-                                {/* Desktop Next Arrow */}
-                                <button 
-                                    onClick={nextCard}
-                                    disabled={currentCardIdx === deck.length - 1}
-                                    className="hidden sm:flex p-4 rounded-full bg-card dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-lg text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 disabled:opacity-30 disabled:cursor-not-allowed transition-all hover:scale-110 active:scale-95"
-                                    title={t('next')}
-                                >
-                                    <ChevronRight size={32} className="rtl:rotate-180" />
-                                </button>
-                            </div>
-                            
-                            {/* Controls Bar (Mobile Nav + Shuffle) */}
-                            <div className="flex items-center justify-between bg-card dark:bg-gray-800 p-4 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm max-w-xl mx-auto w-full">
-                                {/* Mobile Previous */}
-                                <button 
-                                    onClick={prevCard}
-                                    disabled={currentCardIdx === 0}
-                                    className="sm:hidden p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                                >
-                                    <ChevronLeft size={24} className="rtl:rotate-180" />
-                                </button>
+            <FocusMode isActive={isFocusMode} onClose={() => setIsFocusMode(false)}>
+                {activeTab === 'flashcards' && (
+                    <div className="max-w-4xl mx-auto w-full">
+                        {deck && deck.length > 0 ? (
+                            <div className="flex flex-col gap-8 w-full">
                                 
-                                <div className="flex items-center gap-4 mx-auto sm:mx-0">
-                                    <span className="font-mono font-medium text-gray-600 dark:text-gray-300">
-                                        {currentCardIdx + 1} / {deck.length}
-                                    </span>
-                                    <div className="h-4 w-px bg-gray-300 dark:bg-gray-600"></div>
+                                <div className="flex items-center justify-center gap-4 sm:gap-8 w-full">
+                                    {/* Desktop Previous Arrow */}
                                     <button 
-                                        onClick={shuffleDeck}
-                                        className="flex items-center gap-2 text-sm font-bold text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 px-3 py-1.5 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
+                                        onClick={prevCard}
+                                        disabled={currentCardIdx === 0}
+                                        className="hidden sm:flex p-4 rounded-full bg-card dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-lg text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 disabled:opacity-30 disabled:cursor-not-allowed transition-all hover:scale-110 active:scale-95"
+                                        title={t('previous')}
                                     >
-                                        <Shuffle size={18} />
-                                        Shuffle
+                                        <ChevronLeft size={32} className="rtl:rotate-180" />
+                                    </button>
+                                    
+                                    {/* Card Container */}
+                                    <div className="flex-1 w-full max-w-xl mx-auto">
+                                        <Flashcard 
+                                            key={`${lecture.id}-${currentCardIdx}-${deck[currentCardIdx].question}`} // Unique key forces reset of flip state
+                                            data={deck[currentCardIdx]} 
+                                            onNext={(rating) => {
+                                                if (rating !== 'again') {
+                                                    const cardId = `${lecture.id}-${deck[currentCardIdx].question.substring(0, 30).replace(/[^a-zA-Z0-9]/g, '')}`;
+                                                    rateSRSCard(cardId, rating);
+                                                }
+                                                nextCard();
+                                            }}
+                                        />
+                                    </div>
+
+                                    {/* Desktop Next Arrow */}
+                                    <button 
+                                        onClick={nextCard}
+                                        disabled={currentCardIdx === deck.length - 1}
+                                        className="hidden sm:flex p-4 rounded-full bg-card dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-lg text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 disabled:opacity-30 disabled:cursor-not-allowed transition-all hover:scale-110 active:scale-95"
+                                        title={t('next')}
+                                    >
+                                        <ChevronRight size={32} className="rtl:rotate-180" />
                                     </button>
                                 </div>
+                                
+                                {/* Controls Bar (Mobile Nav + Shuffle) */}
+                                <div className="flex items-center justify-between bg-card dark:bg-gray-800 p-4 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm max-w-xl mx-auto w-full">
+                                    {/* Mobile Previous */}
+                                    <button 
+                                        onClick={prevCard}
+                                        disabled={currentCardIdx === 0}
+                                        className="sm:hidden p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                                    >
+                                        <ChevronLeft size={24} className="rtl:rotate-180" />
+                                    </button>
+                                    
+                                    <div className="flex items-center gap-4 mx-auto sm:mx-0">
+                                        <span className="font-mono font-medium text-gray-600 dark:text-gray-300">
+                                            {currentCardIdx + 1} / {deck.length}
+                                        </span>
+                                        <div className="h-4 w-px bg-gray-300 dark:bg-gray-600"></div>
+                                        <button 
+                                            onClick={shuffleDeck}
+                                            className="flex items-center gap-2 text-sm font-bold text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 px-3 py-1.5 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
+                                        >
+                                            <Shuffle size={18} />
+                                            Shuffle
+                                        </button>
+                                    </div>
 
-                                {/* Mobile Next */}
-                                <button 
-                                    onClick={nextCard}
-                                    disabled={currentCardIdx === deck.length - 1}
-                                    className="sm:hidden p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                                >
-                                    <ChevronRight size={24} className="rtl:rotate-180" />
-                                </button>
+                                    {/* Mobile Next */}
+                                    <button 
+                                        onClick={nextCard}
+                                        disabled={currentCardIdx === deck.length - 1}
+                                        className="sm:hidden p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                                    >
+                                        <ChevronRight size={24} className="rtl:rotate-180" />
+                                    </button>
+                                </div>
+                                
+                                {/* Suggestion Button - Only for logged in users */}
+                                {user && !user.isGuest && !isFocusMode && (
+                                    <div className="text-center">
+                                        <button 
+                                            onClick={() => setIsSuggestModalOpen(true)}
+                                            className="inline-flex items-center gap-2 text-sm text-gray-500 hover:text-blue-600 dark:text-gray-400 dark:hover:text-blue-400 transition-colors"
+                                        >
+                                            <PlusCircle size={16} />
+                                            Suggest a Flashcard
+                                        </button>
+                                    </div>
+                                )}
                             </div>
-                            
-                            {/* Suggestion Button - Only for logged in users */}
-                            {user && !user.isGuest && (
-                                <div className="text-center">
+                        ) : (
+                            <div className="text-center py-12 text-gray-500 dark:text-gray-400 bg-card dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700">
+                                <p className="mb-4">No flashcards available for this lecture yet.</p>
+                                {user && !user.isGuest && (
                                     <button 
                                         onClick={() => setIsSuggestModalOpen(true)}
-                                        className="inline-flex items-center gap-2 text-sm text-gray-500 hover:text-blue-600 dark:text-gray-400 dark:hover:text-blue-400 transition-colors"
+                                        className="inline-flex items-center gap-2 px-4 py-2 bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400 rounded-lg hover:bg-blue-100 transition-colors"
                                     >
                                         <PlusCircle size={16} />
-                                        Suggest a Flashcard
+                                        Be the first to suggest one
                                     </button>
-                                </div>
-                            )}
+                                )}
+                            </div>
+                        )}
+                    </div>
+                )}
+
+                {activeTab === 'quiz' && (
+                    <div className="max-w-2xl mx-auto w-full print:max-w-none print:w-full">
+                        {/* Print Header - Visible only when printing */}
+                        <div className="hidden print-only mb-8">
+                            <h1 className="text-2xl font-bold">{lecture.title} - Quiz</h1>
+                            <p>Name: __________________________  Date: ______________</p>
                         </div>
-                    ) : (
-                        <div className="text-center py-12 text-gray-500 dark:text-gray-400 bg-card dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700">
-                            <p className="mb-4">No flashcards available for this lecture yet.</p>
-                            {user && !user.isGuest && (
-                                <button 
-                                    onClick={() => setIsSuggestModalOpen(true)}
-                                    className="inline-flex items-center gap-2 px-4 py-2 bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400 rounded-lg hover:bg-blue-100 transition-colors"
-                                >
-                                    <PlusCircle size={16} />
-                                    Be the first to suggest one
-                                </button>
-                            )}
-                        </div>
-                    )}
+
+                        {lecture.quiz && lecture.quiz.length > 0 ? (
+                            <Quiz questions={lecture.quiz} onComplete={handleQuizComplete} />
+                        ) : (
+                            <div className="text-center py-12 text-gray-500 dark:text-gray-400 bg-card dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700">
+                                No quiz available for this lecture yet.
+                            </div>
+                        )}
+                    </div>
+                )}
+            </FocusMode>
+
+            {/* Notes Tab */}
+            {activeTab === 'notes' && (
+                <div className="w-full flex justify-center animate-fade-in pb-12">
+                    <LectureNotes lectureId={lecture.id} />
                 </div>
             )}
 
@@ -507,24 +561,6 @@ const LectureRoom: React.FC = () => {
                                 </div>
                             </div>
                         ))
-                    )}
-                </div>
-            )}
-
-            {activeTab === 'quiz' && (
-                <div className="max-w-2xl mx-auto print:max-w-none print:w-full">
-                    {/* Print Header - Visible only when printing */}
-                    <div className="hidden print-only mb-8">
-                        <h1 className="text-2xl font-bold">{lecture.title} - Quiz</h1>
-                        <p>Name: __________________________  Date: ______________</p>
-                    </div>
-
-                    {lecture.quiz && lecture.quiz.length > 0 ? (
-                        <Quiz questions={lecture.quiz} onComplete={handleQuizComplete} />
-                    ) : (
-                        <div className="text-center py-12 text-gray-500 dark:text-gray-400 bg-card dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700">
-                            No quiz available for this lecture yet.
-                        </div>
                     )}
                 </div>
             )}

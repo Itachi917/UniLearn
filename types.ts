@@ -58,6 +58,13 @@ export interface Subject {
   questionBank?: QuizQuestion[]; // Dedicated subject-wide questions
 }
 
+export interface SRSCardData {
+  nextReviewDate: string; // ISO string
+  interval: number; // days
+  easeFactor: number;
+  repetitions: number;
+}
+
 export interface UserProgress {
   completedLectures: string[]; // IDs of completed lectures
   lastVisitedLectureId?: string;
@@ -68,6 +75,13 @@ export interface UserProgress {
   studyStreak?: number; // Current streak in days
   lastStudyDate?: string; // ISO String of last active day
   totalStudyMinutes?: number; // Total minutes spent in LectureRoom
+  xp?: number; // Total XP earned
+  badges?: string[]; // Array of badge IDs
+  
+  // Phase 2-3 Features
+  srsData?: Record<string, SRSCardData>; // cardId -> SRS data. Card ID can be `${lectureId}-${index}`
+  lectureNotes?: Record<string, string>; // lectureId -> markdown notes
+  examDates?: Record<string, string>; // subjectId -> ISO string date
 }
 
 export interface User {
