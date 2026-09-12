@@ -325,9 +325,31 @@ const AdminDashboard: React.FC = () => {
             })
         });
 
-        const dataResponse = await response.json();
+        const contentType = response.headers.get("content-type") || "";
+        let dataResponse;
+
+        if (!response.ok) {
+            let errorMessage;
+            if (contentType.includes("application/json")) {
+                dataResponse = await response.json();
+                errorMessage = dataResponse.error || "Generation failed from backend API";
+            } else {
+                const text = await response.text();
+                console.error("AI endpoint returned non-JSON error:", text);
+                errorMessage = "AI service is temporarily unavailable or returned an invalid response.";
+            }
+            throw new Error(errorMessage);
+        }
+
+        if (!contentType.includes("application/json")) {
+            const text = await response.text();
+            console.error("Expected JSON but received:", text);
+            throw new Error("AI service returned an invalid response.");
+        }
+
+        dataResponse = await response.json();
         
-        if (!response.ok || !dataResponse.success) {
+        if (!dataResponse.success) {
             throw new Error(dataResponse.error || "Generation failed from backend API");
         }
 

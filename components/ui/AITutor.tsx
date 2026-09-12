@@ -98,9 +98,31 @@ ${contextData}
         })
       });
 
-      const data = await response.json();
+      const contentType = response.headers.get("content-type") || "";
+      let data;
 
-      if (!response.ok || !data.success) {
+      if (!response.ok) {
+        let errorMessage;
+        if (contentType.includes("application/json")) {
+            data = await response.json();
+            errorMessage = data.error || "AI request failed";
+        } else {
+            const text = await response.text();
+            console.error("AI endpoint returned non-JSON error:", text);
+            errorMessage = "AI service is temporarily unavailable or returned an invalid response.";
+        }
+        throw new Error(errorMessage);
+      }
+
+      if (!contentType.includes("application/json")) {
+        const text = await response.text();
+        console.error("Expected JSON but received:", text);
+        throw new Error("AI service returned an invalid response.");
+      }
+
+      data = await response.json();
+
+      if (!data.success) {
         throw new Error(data.error || "Failed to fetch response from AI backend.");
       }
 
