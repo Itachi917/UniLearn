@@ -82,10 +82,8 @@ ${contextData}
       const requestPayload: any = {
         model: 'gemini-3.8-flash',
         input: userMessage.content,
-        config: {
-          systemInstruction: systemPrompt,
-          temperature: 0.2, // Low temperature for factual RAG responses
-        }
+        systemInstruction: systemPrompt,
+        temperature: 0.2 // Low temperature for factual RAG responses
       };
 
       if (interactionId) {
