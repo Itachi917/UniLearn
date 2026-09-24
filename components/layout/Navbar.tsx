@@ -5,7 +5,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { APP_THEMES } from '../../constants';
 
 const Navbar: React.FC = () => {
-  const { user, theme, toggleTheme, language, setLanguage, logout, t, isAdmin, changeAppTheme, currentTheme } = useApp();
+  const { user, theme, toggleTheme, language, setLanguage, logout, t, isAdmin, changeAppTheme, currentTheme, progress } = useApp();
   const navigate = useNavigate();
   const [showThemeMenu, setShowThemeMenu] = useState(false);
   const themeMenuRef = useRef<HTMLDivElement>(null);

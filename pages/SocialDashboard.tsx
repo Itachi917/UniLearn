@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import Navbar from '../components/layout/Navbar';
 import { useApp } from '../context/AppContext';
-import { Swords, Users, MessageSquare, Trophy, Plus } from 'lucide-react';
+import { Swords, Users, MessageSquare, Trophy, Plus, Clock } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 const SocialDashboard: React.FC = () => {

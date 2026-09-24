@@ -75,6 +75,7 @@ export interface UserProgress {
   studyStreak?: number; // Current streak in days
   lastStudyDate?: string; // ISO String of last active day
   totalStudyMinutes?: number; // Total minutes spent in LectureRoom
+  activityHistory?: Record<string, number>; // date -> minutes
   xp?: number; // Total XP earned
   badges?: string[]; // Array of badge IDs
   
