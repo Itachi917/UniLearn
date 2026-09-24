@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { User, UserProgress, Language, Subject, AppTheme, FlashcardSuggestion } from '../types';
 import { TRANSLATIONS, APP_THEMES } from '../constants';
 import { supabase } from '../lib/supabase';
+import { STATIC_SUBJECTS } from '../lib/staticData';
 
 interface AppContextType {
   user: User | null;
@@ -53,7 +54,7 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
     lastStudyDate: '',
     totalStudyMinutes: 0
   });
-  const [subjects, setSubjects] = useState<Subject[]>([]);
+  const [subjects, setSubjects] = useState<Subject[]>(STATIC_SUBJECTS);
   const [isLoading, setIsLoading] = useState(true);
 
   // Computed
@@ -62,34 +63,8 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
 
   const queryClient = useQueryClient();
 
-  const { data: fetchedSubjects, refetch: refetchSubjectsQuery } = useQuery({
-    queryKey: ['subjects'],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('app_content')
-        .select('content')
-        .eq('id', 'main')
-        .maybeSingle();
-      
-      if (error) {
-        console.error("Error fetching subjects from Supabase:", error);
-        throw error;
-      }
-      return Array.isArray(data?.content) ? data.content as Subject[] : [];
-    },
-    staleTime: 5 * 60 * 1000, // Data is fresh for 5 minutes
-    gcTime: 30 * 60 * 1000, // Keep in cache for 30 minutes
-  });
-
-  // Keep local state in sync with React Query for optimistic updates by Admin
-  useEffect(() => {
-    if (fetchedSubjects) {
-      setSubjects(fetchedSubjects);
-    }
-  }, [fetchedSubjects]);
-
   const refreshSubjects = async () => {
-    await refetchSubjectsQuery();
+    // No-op since subjects are now static
   };
 
   const calculateStreak = (lastDateStr?: string, currentStreak?: number) => {
@@ -199,6 +174,9 @@ export const AppProvider = ({ children }: { children?: ReactNode }) => {
                 
                 const updatedProgress = {
                     ...dbProgress,
+                    completedLectures: dbProgress.completedLectures || [],
+                    quizScores: dbProgress.quizScores || {},
+                    totalStudyMinutes: dbProgress.totalStudyMinutes || 0,
                     studyStreak: streakInfo.streak,
                     lastStudyDate: streakInfo.date
                 };

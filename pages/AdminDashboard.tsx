@@ -122,29 +122,7 @@ const AdminDashboard: React.FC = () => {
   }, [view]);
 
   const saveToDatabase = async () => {
-    setSaving(true);
-    setMsg(null);
-    try {
-      const { error } = await supabase
-        .from('app_content')
-        .upsert({ id: 'main', content: subjects }, { onConflict: 'id' });
-
-      if (error) throw error;
-      
-      try {
-        await refreshSubjects();
-      } catch (refErr) {
-        console.warn("Saved successfully, but failed to refresh local data immediately:", refErr);
-      }
-      
-      setMsg({ type: 'success', text: 'Changes saved successfully to database! All users will see updates shortly.' });
-      setTimeout(() => setMsg(null), 4000);
-    } catch (err: any) {
-      console.error("Save error:", err);
-      setMsg({ type: 'error', text: 'Failed to save: ' + (err.message || "Unknown error") });
-    } finally {
-      setSaving(false);
-    }
+    alert("Saving curriculum to database is disabled because subjects are now bundled statically into the application. To update content, please edit lib/staticData.ts and deploy.");
   };
 
   const saveSuggestionsList = async (newList: FlashcardSuggestion[]) => {
@@ -183,7 +161,8 @@ const AdminDashboard: React.FC = () => {
 
       // 3. Persist Content Changes immediately to avoid data loss if admin leaves
       try {
-          await supabase.from('app_content').upsert({ id: 'main', content: newSubjects }, { onConflict: 'id' });
+          // Saving to DB disabled as data is static
+          // await supabase.from('app_content').upsert({ id: 'main', content: newSubjects }, { onConflict: 'id' });
           
           // 4. Remove from suggestions list and persist
           const newSuggestions = suggestions.filter(s => s.id !== sugg.id);
